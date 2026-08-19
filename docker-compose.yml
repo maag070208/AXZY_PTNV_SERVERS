@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ptnv-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cartas
+      POSTGRES_USER: cartas
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cartas_dev_pwd}
+    volumes:
+      - ptnv_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cartas -d cartas"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: axzydev/axzy_ptnv_api:latest
+    container_name: ptnv-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4001
+      DATABASE_URL: postgresql://cartas:${POSTGRES_PASSWORD:-cartas_dev_pwd}@postgres:5432/cartas?schema=public
+      JWT_SECRET: ${JWT_SECRET:-cambia_este_secreto_en_produccion}
+      WEB_ORIGIN: "*"
+    ports:
+      - "4001:4001"
+    # Migraciones + seed automático al iniciar, luego arranca el API
+    command: >
+      sh -c "npx prisma migrate deploy && node dist/prisma/seed.js && node dist/src/index.js"
+
+  web:
+    image: axzydev/axzy_ptnv_web:latest
+    container_name: ptnv-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  ptnv_pgdata:
