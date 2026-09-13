@@ -30,6 +30,7 @@ services:
       DATABASE_URL: postgresql://cartas:${POSTGRES_PASSWORD:-cartas_dev_pwd}@postgres:5432/cartas?schema=public
       JWT_SECRET: ${JWT_SECRET:-cambia_este_secreto_en_produccion}
       WEB_ORIGIN: "*"
+      ABLY_API_KEY: ${ABLY_API_KEY:-}
     ports:
       - "4001:4001"
     # Migraciones + seed automático al iniciar, luego arranca el API
