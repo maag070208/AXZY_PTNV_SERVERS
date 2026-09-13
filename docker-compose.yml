@@ -43,6 +43,8 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+    environment:
+      WEB_API_URL: ${WEB_API_URL:-/api/v1}
     ports:
       - "8080:80"
 
