@@ -79,6 +79,9 @@ Edítalo (macOS: `nano .env` o `open -e .env`; Windows: `notepad .env`) y comple
 | `POSTGRES_PASSWORD` | Contraseña de la base de datos | **Cámbiala** de `cartas_dev_pwd` por una contraseña propia/fuerte |
 | `JWT_SECRET` | Secreto con el que se firman los tokens de sesión | **Cámbialo** de `cambia_este_secreto_en_produccion` por una cadena larga y aleatoria |
 | `ABLY_API_KEY` | Key de Ably para el **realtime** de notificaciones de tickets | La misma key que ya usas en desarrollo (`ABLY_API_KEY` de `api/.env` o `VITE_ABLY_KEY` de `web/.env` — es el **mismo valor**) |
+| `CHECADOR_USER` / `CHECADOR_PASS` | Usuario y contraseña de los **relojes checadores** (los mismos para todos). El sistema solo lee de los relojes | Los del reloj. Si la contraseña lleva `$`, `#` o espacios, ponla entre comillas simples. Si la cambias en los relojes, cámbiala aquí también |
+| `ACCESS_REPORT_TIMEZONE` | Zona horaria de los reportes de entradas/salidas | `America/Tijuana` (hora del Pacífico, la de los relojes). Vacía = `America/Mexico_City` |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_BUCKET_NAME` / `AWS_REGION` | Bucket de S3 para los archivos (evidencias de tickets, fotos y documentos del personal) | Los de tu cuenta de AWS. Sin ellos las subidas fallan; lo demás funciona |
 
 > ⚠️ **Importante**: usa SIEMPRE la misma `ABLY_API_KEY` que está en la web ya publicada. La web la trae incrustada desde la imagen; si pones una key distinta aquí, el API recibirá los eventos pero la web no los mostrará (no matchearán).
 
@@ -149,6 +152,8 @@ Si algo no cambió (por ejemplo, el contenedor web sigue con la imagen vieja), f
 docker compose up -d --force-recreate
 ```
 
+> ⚠️ `git pull` **no toca tu `.env`**. Si el `.env.example` trae variables nuevas, cópialas a tu `.env` con sus valores (ver la tabla del paso 4) y corre `docker compose up -d` para que el API las tome.
+
 ---
 
 ## 8. Operación básica (para el día a día)
@@ -185,6 +190,13 @@ netstat -ano | findstr "8080 4001 5433"   # Windows
 ```
 
 Si otro programa usa esos puertos, detenlo o cambia el mapeo en `docker-compose.yml`.
+
+### Relojes checadores: "La API no tiene el usuario de los relojes"
+
+1. Pon `CHECADOR_USER` y `CHECADOR_PASS` en `.env` (paso 4) y corre `docker compose up -d`.
+2. En la web, **Configuración → Relojes checadores**, da de alta cada reloj con su dirección (ej. `https://192.168.1.135`) y marca si cuenta para entradas/salidas.
+
+Los relojes, sus checadas y los vínculos con los empleados viven en la base de datos, no en las imágenes: una instalación nueva empieza sin relojes. Al dar de alta un reloj se descarga su historial en segundo plano (puede tardar si tiene muchos eventos).
 
 ### El realtime de tickets no llega en vivo
 

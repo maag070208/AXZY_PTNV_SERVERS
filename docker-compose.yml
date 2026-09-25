@@ -31,6 +31,18 @@ services:
       JWT_SECRET: ${JWT_SECRET:-cambia_este_secreto_en_produccion}
       WEB_ORIGIN: "*"
       ABLY_API_KEY: ${ABLY_API_KEY:-}
+      # Relojes checadores: usuario de los relojes (el mismo para todos). El
+      # sistema solo les lee; los relojes se dan de alta desde la web.
+      CHECADOR_USER: ${CHECADOR_USER:-}
+      CHECADOR_PASS: ${CHECADOR_PASS:-}
+      # Zona horaria de los reportes de entradas/salidas. Vacía = America/Mexico_City.
+      ACCESS_REPORT_TIMEZONE: ${ACCESS_REPORT_TIMEZONE:-}
+      # Archivos (evidencias de tickets, fotos y documentos del personal) en S3.
+      # Sin bucket las subidas fallan; lo demás funciona.
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-}
+      AWS_REGION: ${AWS_REGION:-us-east-2}
     ports:
       - "4001:4001"
     # Migraciones + seed automático al iniciar, luego arranca el API
