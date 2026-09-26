@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Actualiza Puerto Nuevo. Corre dentro de WSL, desde la carpeta AXZY_PTNV_SERVERS:
+# Actualiza Puerto Nuevo (en Windows corre dentro de WSL):
 #   1. Revisa que Docker responda (si no, intenta arrancarlo).
 #   2. Trae la configuracion nueva de este repositorio (git pull).
-#   3. Respalda la base de datos en respaldos/ (guarda los ultimos 14).
+#   3. Respalda la base de datos en respaldos/ (como respaldar.sh).
 #   4. Baja las imagenes nuevas del API y la web.
 #   5. Aplica las migraciones (prisma migrate deploy) y se detiene si fallan:
 #      el sistema viejo sigue corriendo.
@@ -11,46 +11,13 @@
 # Uso normal: doble clic en Actualizar.cmd. A mano: bash ./actualizar.sh
 # El detalle de cada corrida queda en logs/.
 
-RESPALDOS_A_GUARDAR=14
-LOGS_A_GUARDAR=30
+TOTAL_PASOS=7
+MENSAJE_FALLA="La actualizacion se detuvo en ese paso."
 ESPERA_SEGUNDOS=180
-CONTENEDOR_BD=ptnv-postgres
 URL_API=http://localhost:4001/api/v1/health
 URL_WEB=http://localhost:8080/api/v1/health
 IMAGENES=(axzydev/axzy_ptnv_api:latest axzydev/axzy_ptnv_web:latest)
-
-AZUL=$'\e[1;36m'; VERDE=$'\e[1;32m'; AMARILLO=$'\e[1;33m'; ROJO=$'\e[1;31m'; NORMAL=$'\e[0m'
-
-titulo() { printf '\n%s==> %s%s\n' "$AZUL" "$1" "$NORMAL"; }
-aviso()  { printf '%sAVISO: %s%s\n' "$AMARILLO" "$1" "$NORMAL"; }
-bien()   { printf '%s%s%s\n' "$VERDE" "$1" "$NORMAL"; }
-falla()  {
-    printf '\n%sERROR: %s%s\n' "$ROJO" "$1" "$NORMAL"
-    printf '%sLa actualizacion se detuvo en ese paso. Detalle en: %s%s\n' "$ROJO" "$LOG" "$NORMAL"
-    exit 1
-}
-
-# Con sudo solo si el usuario de WSL no esta en el grupo docker.
-DOCKER=(docker)
-dk() { "${DOCKER[@]}" "$@"; }
-
-asegurar_docker() {
-    command -v docker >/dev/null || falla "No encuentro 'docker' dentro de WSL."
-    local salida
-    salida=$(docker info 2>&1) && return 0
-    if grep -qi 'permission denied' <<<"$salida"; then
-        DOCKER=(sudo docker)
-        dk info >/dev/null 2>&1 && return 0
-    fi
-    echo "Docker no esta corriendo: intentando arrancarlo..."
-    sudo service docker start >/dev/null 2>&1 || true
-    local limite=$((SECONDS + 90))
-    while ((SECONDS < limite)); do
-        dk info >/dev/null 2>&1 && return 0
-        sleep 5
-    done
-    falla "Docker no responde. Si usas Docker Desktop, abrelo; si no, corre 'sudo service docker start' y vuelve a intentar."
-}
+source "$(dirname "$0")/comun.sh"
 
 leer_claves() { sed -n 's/^[[:space:]]*\([A-Za-z0-9_]*\)[[:space:]]*=.*/\1/p' "$1"; }
 
@@ -66,10 +33,6 @@ avisar_variables_nuevas() {
 }
 
 id_imagen() { dk image inspect --format '{{.Id}}' "$1" 2>/dev/null; }
-
-borrar_viejos() { # carpeta patron cuantos_guardar
-    ls -1t "$1"/$2 2>/dev/null | tail -n +$(($3 + 1)) | xargs -r rm -f --
-}
 
 esperar_url() { # url nombre
     local limite=$((SECONDS + ESPERA_SEGUNDOS)) codigo
@@ -89,37 +52,25 @@ esperar_url() { # url nombre
 }
 
 main() {
-    cd "$(dirname "$0")" || exit 1
-    mkdir -p logs respaldos
-    local sello
-    sello=$(date +%Y%m%d-%H%M%S)
-    LOG="$PWD/logs/actualizar-$sello.log"
-    exec > >(tee -a "$LOG") 2>&1
+    iniciar_log actualizar
 
     echo "Actualizando Puerto Nuevo en $PWD ($(date '+%d/%m/%Y %H:%M'))"
     for programa in git curl; do
-        command -v "$programa" >/dev/null || falla "No encuentro '$programa' dentro de WSL (sudo apt install $programa)."
+        command -v "$programa" >/dev/null || falla "No encuentro '$programa' (en Windows se busca dentro de WSL)."
     done
     asegurar_docker
 
-    titulo "Traer la configuracion nueva (git pull)"
+    titulo "Traer la configuración nueva (git pull)"
     # Sin nadie frente a la PC, git no debe quedarse esperando usuario o contrasena.
     # En /mnt/c los permisos de archivo no son confiables: se ignoran.
     GIT_TERMINAL_PROMPT=0 git -c safe.directory="$PWD" -c core.fileMode=false pull --ff-only \
         || falla "git pull no pudo traer los cambios."
     avisar_variables_nuevas
 
-    # La base se levanta primero: si el sistema estaba apagado, igual hay respaldo.
     titulo "Respaldar la base de datos"
-    local respaldo="respaldos/cartas-$sello.dump"
-    dk compose up -d --wait postgres || falla "La base de datos no arranco."
-    dk exec "$CONTENEDOR_BD" pg_dump -U cartas -d cartas -Fc >"$respaldo.parcial" \
-        || { rm -f "$respaldo.parcial"; falla "No se pudo respaldar la base de datos."; }
-    mv "$respaldo.parcial" "$respaldo"
-    echo "Respaldo: $PWD/$respaldo ($(du -h "$respaldo" | cut -f1))"
-    borrar_viejos respaldos '*.dump' "$RESPALDOS_A_GUARDAR"
+    respaldar_bd
 
-    titulo "Bajar las imagenes nuevas"
+    titulo "Bajar las imágenes nuevas"
     local antes=() imagen i
     for imagen in "${IMAGENES[@]}"; do antes+=("$(id_imagen "$imagen")"); done
     dk compose pull || falla "No se pudieron bajar las imagenes (revisa el internet)."
@@ -134,10 +85,10 @@ main() {
     # Corre en un contenedor aparte: si falla, el API viejo sigue atendiendo.
     titulo "Aplicar migraciones (prisma migrate deploy)"
     dk compose run --rm --no-deps -T api npx prisma migrate deploy \
-        || falla "Las migraciones fallaron. El sistema sigue con la version anterior; respaldo en $respaldo."
+        || falla "Las migraciones fallaron. El sistema sigue con la version anterior; respaldo en $RESPALDO."
     bien "Migraciones al 100%."
 
-    titulo "Reiniciar los servidores con la version nueva"
+    titulo "Reiniciar los servidores con la versión nueva"
     dk compose up -d --remove-orphans || falla "No se pudieron levantar los contenedores."
 
     titulo "Revisar que el sistema responda"
@@ -149,11 +100,11 @@ main() {
     esperar_url "$URL_WEB" "Web" || falla "La web no llega al API ($URL_WEB)."
     dk compose ps
 
-    titulo "Borrar imagenes viejas"
+    titulo "Borrar imágenes viejas"
     dk image prune -f
 
-    printf '\n%sLISTO: Puerto Nuevo quedo actualizado.%s\n' "$VERDE" "$NORMAL"
-    borrar_viejos logs '*.log' "$LOGS_A_GUARDAR"
+    printf '\n%sLISTO: Puerto Nuevo quedó actualizado.%s\n' "$VERDE" "$NORMAL"
+    terminar_log
 }
 
 # Todo va dentro de main: git pull puede reescribir este archivo mientras corre,

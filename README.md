@@ -4,6 +4,8 @@ Repositorio para **desplegar** el sistema completo (API + Web + Base de datos) e
 
 > ⚠️ Aquí **no se compila código**: este repo baja las imágenes ya publicadas en Docker Hub (`axzydev/axzy_ptnv_api` y `axzydev/axzy_ptnv_web`) y solo las orquesta.
 
+> 🖱️ **Lo más fácil: el Agente Puerto Nuevo** (Windows, macOS y Linux). Es una app con ícono que revisa si tienes Git y Docker (y WSL en Windows) y te dice qué descargar si falta algo, descarga este repositorio, arma el `.env`, instala, actualiza y respalda con un clic. Instaladores: `Agente-Puerto-Nuevo-Setup-<versión>.exe` (Windows), `.dmg` (macOS) y `.AppImage` (Linux); ver [agente/README.md](agente/README.md). Los pasos 2 a 5 de abajo son lo mismo, a mano.
+
 ---
 
 ## 1. Servicios
@@ -123,28 +125,25 @@ docker compose ps
 
 ## 7. Actualizar a la última versión
 
-**Doble clic en `Actualizar.cmd`** (en la carpeta `AXZY_PTNV_SERVERS`). Se abre una ventana, entra a WSL y hace todo solo; al final dice **LISTO** o **ERROR**:
+**Con el Agente:** botón **Actualizar ahora**. Muestra cada paso y al final dice si quedó bien o dónde se detuvo.
 
-1. Revisa que Docker responda dentro de WSL (si no, intenta arrancarlo; puede pedir la contraseña de WSL).
+**Sin el Agente (Windows):** doble clic en `Actualizar.cmd` (en la carpeta `AXZY_PTNV_SERVERS`). Se abre una ventana, entra a WSL y hace lo mismo; al final dice **LISTO** o **ERROR**. En macOS/Linux: `bash ./actualizar.sh`.
+
+Los pasos (`actualizar.sh`):
+
+1. Revisa que Docker responda (en Windows, dentro de WSL; si no, intenta arrancarlo).
 2. Trae la configuración nueva de este repositorio (`git pull`).
-3. Respalda la base de datos en `respaldos\` (se guardan los últimos 14).
+3. Respalda la base de datos en `respaldos/` (ver «Respaldar la base de datos»).
 4. Baja las imágenes nuevas del API y la web (`docker compose pull`) y dice cuál trae versión nueva.
 5. Aplica las migraciones (`npx prisma migrate deploy`). **Si fallan, se detiene aquí y el sistema sigue con la versión anterior.**
 6. Reinicia los servidores con la versión nueva y espera a que `/api/v1/health` responda 200 (directo en el API `:4001` y a través de la web `:8080`).
 7. Borra las imágenes viejas.
 
-Si algo falla, se detiene en ese paso y deja el detalle en `logs\` (manda ese archivo a soporte).
+Si algo falla, se detiene en ese paso y deja el detalle en `logs/` (manda ese archivo a soporte).
 
-**¿Quieres el ícono en el escritorio?** Clic derecho en `Actualizar.cmd` → *Enviar a* → *Escritorio (crear acceso directo)*. Si en lugar de eso **copias** el archivo a otro lado, ábrelo con clic derecho → *Editar* y pon la ruta de la carpeta en `CARPETA` (sirve `C:\Users\...\AXZY_PTNV_SERVERS` o `/mnt/c/Users/.../AXZY_PTNV_SERVERS`).
+**¿`Actualizar.cmd` en el escritorio?** Clic derecho → *Enviar a* → *Escritorio (crear acceso directo)*. Si en lugar de eso **copias** el archivo a otro lado, ábrelo con clic derecho → *Editar* y pon la ruta de la carpeta en `CARPETA` (sirve `C:\Users\...\AXZY_PTNV_SERVERS` o `/mnt/c/Users/.../AXZY_PTNV_SERVERS`).
 
-A mano, desde WSL:
-
-```bash
-cd /mnt/c/Users/<usuario>/AXZY_PTNV_SERVERS
-bash ./actualizar.sh
-```
-
-> ⚠️ `git pull` **no toca tu `.env`**. Si la configuración nueva trae variables, la actualización lo avisa (`AVISO: faltan en .env: …`): agrégalas con sus valores (tabla del paso 4) y vuelve a correrla.
+> ⚠️ `git pull` **no toca tu `.env`**. Si la configuración nueva trae variables, la actualización lo avisa (`AVISO: faltan en .env: …`): agrégalas con sus valores (tabla del paso 4, o en el Agente → Configuración) y vuelve a correrla.
 
 ### Actualización automática (opcional)
 
@@ -160,16 +159,28 @@ powershell -ExecutionPolicy Bypass -File programar-actualizacion.ps1
 
 > ⚠️ Con la actualización automática, lo que se publique como `latest` en Docker Hub llega al servidor esa misma noche.
 
+### Respaldar la base de datos
+
+**Con el Agente:** tarjeta *Respaldos* → **Respaldar ahora**. Sin el Agente: `bash ./respaldar.sh` (en Windows, dentro de WSL). La actualización también saca uno antes de tocar nada.
+
+- Quedan en `respaldos/cartas-AAAAMMDD-HHMMSS.dump`; se guardan los últimos 14.
+- **No incluyen las checadas de los relojes** (`time_clock_punches`): son la mayor parte de la base y se pueden volver a bajar de los relojes. La tabla va vacía; lo demás (incluidos los relojes dados de alta y los vínculos con empleados) va completo.
+
 ### Restaurar un respaldo (soporte)
 
-```powershell
+En la carpeta `AXZY_PTNV_SERVERS` (en Windows, dentro de WSL):
+
+```bash
 docker compose stop api
-docker cp respaldos\cartas-AAAAMMDD-HHMMSS.dump ptnv-postgres:/tmp/r.dump
+docker cp respaldos/cartas-AAAAMMDD-HHMMSS.dump ptnv-postgres:/tmp/r.dump
 docker exec ptnv-postgres pg_restore -U cartas -d cartas --clean --if-exists /tmp/r.dump
+# El respaldo no trae checadas: con el cursor en 0 el worker las vuelve a bajar todas.
+docker exec ptnv-postgres psql -U cartas -d cartas -c 'UPDATE time_clocks SET "lastSerialNo" = 0;'
 docker compose start api
 ```
 
-Al arrancar, el API vuelve a aplicar las migraciones de su versión. Si el problema fue la versión nueva, restaurar no basta: hay que regresar también las imágenes a una versión publicada con etiqueta `v…` (en `docker-compose.yml`, en lugar de `latest`).
+- Volver a bajar todo el historial de los relojes tarda. Si solo hacen falta unos días, en lugar del `UPDATE` usa la web: **Control de acceso → Reloj checador**, elige el rango de fechas y **Importar de los relojes**.
+- Al arrancar, el API vuelve a aplicar las migraciones de su versión. Si el problema fue la versión nueva, restaurar no basta: hay que regresar también las imágenes a una versión publicada con etiqueta `v…` (en `docker-compose.yml`, en lugar de `latest`).
 
 ### A mano (si no se puede usar el script)
 
