@@ -30,6 +30,8 @@ function guardarConfig(cambios) {
 }
 
 const esRepo = (carpeta) => !!carpeta && fs.existsSync(path.join(carpeta, SCRIPT));
+// Instalaciones de antes del Agente: el repo esta, pero sin actualizar.sh todavia.
+const esRepoViejo = (carpeta) => fs.existsSync(path.join(carpeta, ".git")) && fs.existsSync(path.join(carpeta, "docker-compose.yml"));
 
 // Carpeta guardada; si no hay, la primera de los lugares de costumbre.
 function carpetaActual() {
@@ -131,6 +133,14 @@ function abrirSubcarpeta(nombre) {
   shell.openPath(fs.existsSync(destino) ? destino : carpeta);
 }
 
+// Trae la version del repo que ya incluye los scripts del Agente.
+function traerVersionNueva(carpeta) {
+  const pull = 'GIT_TERMINAL_PROMPT=0 git -c safe.directory="$PWD" -c core.fileMode=false pull --ff-only';
+  correrTarea("clonar", ["-c", `echo '==> [1/1] Traer la versión nueva de Puerto Nuevo'; ${pull}`], carpeta, ({ ok }) => {
+    if (ok && esRepo(carpeta)) guardarConfig({ carpeta });
+  });
+}
+
 // Recrea los contenedores para que tomen el .env nuevo.
 function aplicarConfiguracion() {
   correrTarea("aplicar", ["-c", "echo '==> [1/1] Reiniciar con la configuración nueva'; docker compose up -d"], exigirCarpeta());
@@ -195,9 +205,15 @@ const manejadores = {
   usarExistente: async () => {
     const carpeta = await elegirCarpeta(`Elige la carpeta ${NOMBRE_CARPETA}`);
     if (!carpeta) return { carpeta: carpetaActual() };
-    if (!esRepo(carpeta)) return { carpeta: carpetaActual(), error: `Esa carpeta no tiene ${SCRIPT}.` };
-    guardarConfig({ carpeta });
-    return { carpeta };
+    if (esRepo(carpeta)) {
+      guardarConfig({ carpeta });
+      return { carpeta };
+    }
+    if (esRepoViejo(carpeta)) {
+      traerVersionNueva(carpeta);
+      return { carpeta: carpetaActual(), actualizando: true };
+    }
+    return { carpeta: carpetaActual(), error: `Esa carpeta no es ${NOMBRE_CARPETA} (no tiene ${SCRIPT} ni docker-compose.yml).` };
   },
   clonar: (padre) => clonar(padre),
   leerConfiguracion: () => leerConfiguracion(exigirCarpeta()),

@@ -47,7 +47,7 @@ declare global {
       resolverHerramienta: (id: string, estado: EstadoHerramienta) => Promise<{ ok: boolean; error?: string }>;
       abrirDescarga: (id: string, estado: EstadoHerramienta) => Promise<void>;
       elegirDestino: () => Promise<string | null>;
-      usarExistente: () => Promise<{ carpeta: string | null; error?: string }>;
+      usarExistente: () => Promise<{ carpeta: string | null; error?: string; actualizando?: boolean }>;
       clonar: (padre: string) => Promise<{ carpeta: string; yaExistia: boolean }>;
       leerConfiguracion: () => Promise<Campo[]>;
       guardarConfiguracion: (valores: Record<string, string>) => Promise<void>;

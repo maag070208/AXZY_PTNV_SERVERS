@@ -30,17 +30,20 @@ export default function Asistente({ estado, tarea, onCarpeta, onTerminar }: Prop
 
   const clonar = async () => {
     setErrorCarpeta(null);
-    const resultado = (await tarea.iniciar("clonar", () => window.agente.clonar(destino))) as { carpeta: string; yaExistia: boolean } | undefined;
+    const resultado = await tarea.iniciar("clonar", () => window.agente.clonar(destino));
     if (resultado?.yaExistia) {
       tarea.setFase("ok");
       onCarpeta(resultado.carpeta);
     }
   };
 
+  // Si es una instalacion vieja, el proceso principal arranca un git pull y aqui se ve su avance.
   const usarExistente = async () => {
-    const resultado = await window.agente.usarExistente();
-    setErrorCarpeta(resultado.error ?? null);
-    if (!resultado.error) onCarpeta(resultado.carpeta);
+    setErrorCarpeta(null);
+    const resultado = await tarea.iniciar("clonar", window.agente.usarExistente);
+    if (!resultado?.actualizando) tarea.reiniciar();
+    setErrorCarpeta(resultado?.error ?? null);
+    if (resultado && !resultado.error) onCarpeta(resultado.carpeta);
   };
 
   const elegirDestino = async () => {
@@ -102,7 +105,15 @@ export default function Asistente({ estado, tarea, onCarpeta, onTerminar }: Prop
             </>
           )}
           {errorCarpeta && <ITAlert variant="error">{errorCarpeta}</ITAlert>}
-          {clonando && <Progreso tarea={tarea} titulos={{ corriendo: "Descargando…", ok: "Descargado", error: "No se pudo descargar" }} />}
+          {estado.instalado && !corriendo && (
+            <ITAlert variant="success" title="Puerto Nuevo ya está instalado en esta carpeta">
+              Ya tiene su configuración (.env). Puedes ir directo al panel para respaldar y actualizar.
+              <div className="mt-2">
+                <ITButton label="Ir al panel" size="sm" onClick={onTerminar} />
+              </div>
+            </ITAlert>
+          )}
+          {clonando && tarea.fase !== "libre" && <Progreso tarea={tarea} titulos={{ corriendo: "Descargando…", ok: "Descargado", error: "No se pudo descargar" }} />}
         </div>
       ),
     },

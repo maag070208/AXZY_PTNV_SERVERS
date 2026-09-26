@@ -48,7 +48,7 @@ export function useTarea(alTerminar?: (resultado: Resultado) => void) {
   }, [alTerminar]);
 
   // Limpia el estado y lanza la tarea; si ni siquiera arranca, queda como error.
-  const iniciar = async (tarea: NombreTarea, lanzar: () => Promise<unknown>) => {
+  const iniciar = async <T,>(tarea: NombreTarea, lanzar: () => Promise<T>): Promise<T | undefined> => {
     setNombre(tarea);
     setPasos([]);
     setTotal(0);

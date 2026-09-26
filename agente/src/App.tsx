@@ -26,7 +26,8 @@ export default function App() {
   }, [recargar]);
 
   const usarExistente = async () => {
-    await window.agente.usarExistente();
+    const resultado = await tarea.iniciar("clonar", window.agente.usarExistente);
+    if (!resultado?.actualizando) tarea.reiniciar();
     recargar();
   };
 
