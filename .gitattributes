@@ -1,0 +1,4 @@
+# Fin de linea fijo: CRLF para los scripts de Windows, LF para los de WSL.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.sh text eol=lf

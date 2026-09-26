@@ -121,38 +121,64 @@ docker compose ps
 
 ---
 
-## 7. Actualizar a la última versión (siempre que haya actualizaciones)
+## 7. Actualizar a la última versión
 
-Este repo trae **dos cosas** que se actualizan por separado:
+**Doble clic en `Actualizar.cmd`** (en la carpeta `AXZY_PTNV_SERVERS`). Se abre una ventana, entra a WSL y hace todo solo; al final dice **LISTO** o **ERROR**:
 
-1. **La configuración/scripts** (`docker-compose.yml`, `.env.example`, `README.md`) → con `git`.
-2. **Las imágenes** del API y la Web (compiladas en CI y publicadas en Docker Hub) → con `docker compose`.
+1. Revisa que Docker responda dentro de WSL (si no, intenta arrancarlo; puede pedir la contraseña de WSL).
+2. Trae la configuración nueva de este repositorio (`git pull`).
+3. Respalda la base de datos en `respaldos\` (se guardan los últimos 14).
+4. Baja las imágenes nuevas del API y la web (`docker compose pull`) y dice cuál trae versión nueva.
+5. Aplica las migraciones (`npx prisma migrate deploy`). **Si fallan, se detiene aquí y el sistema sigue con la versión anterior.**
+6. Reinicia los servidores con la versión nueva y espera a que `/api/v1/health` responda 200 (directo en el API `:4001` y a través de la web `:8080`).
+7. Borra las imágenes viejas.
 
-### Comandos para actualizar TODO
+Si algo falla, se detiene en ese paso y deja el detalle en `logs\` (manda ese archivo a soporte).
+
+**¿Quieres el ícono en el escritorio?** Clic derecho en `Actualizar.cmd` → *Enviar a* → *Escritorio (crear acceso directo)*. Si en lugar de eso **copias** el archivo a otro lado, ábrelo con clic derecho → *Editar* y pon la ruta de la carpeta en `CARPETA` (sirve `C:\Users\...\AXZY_PTNV_SERVERS` o `/mnt/c/Users/.../AXZY_PTNV_SERVERS`).
+
+A mano, desde WSL:
 
 ```bash
-cd AXZY_PTNV_SERVERS
+cd /mnt/c/Users/<usuario>/AXZY_PTNV_SERVERS
+bash ./actualizar.sh
+```
 
-# 1. Trae los últimos cambios de este repositorio (config/scripts)
+> ⚠️ `git pull` **no toca tu `.env`**. Si la configuración nueva trae variables, la actualización lo avisa (`AVISO: faltan en .env: …`): agrégalas con sus valores (tabla del paso 4) y vuelve a correrla.
+
+### Actualización automática (opcional)
+
+Para que se actualice sola todos los días a las 3:00 am, una sola vez en PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File programar-actualizacion.ps1
+```
+
+- Otra hora: agrega `-Hora 04:30`.
+- Quitarla: `Unregister-ScheduledTask -TaskName "Puerto Nuevo - Actualizar" -Confirm:$false`.
+- Corre dentro de WSL con el usuario que la programó y solo con su sesión abierta. Si Docker en WSL necesita `sudo` para arrancar, la automática no puede meter la contraseña: deja Docker arrancando solo o agrega tu usuario al grupo `docker`. Si a esa hora la PC estaba apagada, corre en cuanto se prenda. Cada corrida deja su resultado en `logs\`.
+
+> ⚠️ Con la actualización automática, lo que se publique como `latest` en Docker Hub llega al servidor esa misma noche.
+
+### Restaurar un respaldo (soporte)
+
+```powershell
+docker compose stop api
+docker cp respaldos\cartas-AAAAMMDD-HHMMSS.dump ptnv-postgres:/tmp/r.dump
+docker exec ptnv-postgres pg_restore -U cartas -d cartas --clean --if-exists /tmp/r.dump
+docker compose start api
+```
+
+Al arrancar, el API vuelve a aplicar las migraciones de su versión. Si el problema fue la versión nueva, restaurar no basta: hay que regresar también las imágenes a una versión publicada con etiqueta `v…` (en `docker-compose.yml`, en lugar de `latest`).
+
+### A mano (si no se puede usar el script)
+
+```bash
 git pull
-
-# 2. Baja las últimas imágenes publicadas (API + Web)
 docker compose pull
-
-# 3. Recrea los contenedores con las versiones nuevas
 docker compose up -d
-
-# 4. Verifica que todo quedó arriba
 docker compose ps
 ```
-
-Si algo no cambió (por ejemplo, el contenedor web sigue con la imagen vieja), fuerza la recreación:
-
-```bash
-docker compose up -d --force-recreate
-```
-
-> ⚠️ `git pull` **no toca tu `.env`**. Si el `.env.example` trae variables nuevas, cópialas a tu `.env` con sus valores (ver la tabla del paso 4) y corre `docker compose up -d` para que el API las tome.
 
 ---
 
@@ -206,7 +232,7 @@ Los relojes, sus checadas y los vínculos con los empleados viven en la base de 
 
 ### "Docker daemon is not running" / "Engine stopped"
 
-- Abre **Docker Desktop** y espera a que diga "Engine running".
+- En WSL: `sudo service docker start` (la actualización lo intenta sola). Con Docker Desktop: ábrelo y espera a que diga "Engine running".
 - Luego: `docker compose up -d`.
 
 ---
