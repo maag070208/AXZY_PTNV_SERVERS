@@ -195,6 +195,27 @@ docker compose ps
 
 ## 8. Operación básica (para el día a día)
 
+**Con el Agente** (vive junto al reloj, en la bandeja del sistema, y arranca al iniciar sesión):
+
+- El ícono se pone **verde** o **rojo** según responda el API. Si deja de responder, avisa con una notificación; si la computadora se acaba de prender, primero intenta levantar los servidores solo.
+- **Inicio:** actualizar, abrir la web, y las direcciones para otras PCs y celulares (con QR), marcando cuáles responden.
+- **Servidores:** estado de API, web y base; reiniciar cada uno o todos; logs en vivo; espacio en disco y «Liberar espacio».
+- **Relojes:** cada reloj checador con sus checadas guardadas, la última checada, cuándo se sincronizó y si el servidor lo alcanza en la red.
+- **Ajustes → Mandar a soporte:** arma un `.zip` con logs, estado y versiones (sin las contraseñas del `.env`) en `soporte/`.
+
+Cerrar la ventana solo la esconde; para cerrar el Agente: ícono de la bandeja → *Salir del Agente*.
+
+**Sin el Agente** (en Windows, dentro de WSL):
+
+```bash
+bash ./operar.sh reiniciar api             # o web, postgres, todo; espera a que responda
+bash ./operar.sh logs api                  # log en vivo (Ctrl+C para salir)
+bash ./operar.sh limpiar                   # borra imágenes viejas de Docker (no toca la base)
+bash ./operar.sh diagnostico soporte/hoy   # lo que soporte necesita, en soporte/hoy
+```
+
+O directo con Docker:
+
 ```bash
 docker compose ps                          # estado de los servicios
 docker compose logs -f api                 # logs del API en vivo (Ctrl+C para salir)

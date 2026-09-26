@@ -57,7 +57,7 @@ export default function App() {
         ) : modo === "asistente" ? (
           <Asistente estado={estado} tarea={tarea} onCarpeta={recargar} onTerminar={() => setModo("panel")} />
         ) : (
-          <Panel estado={estado} tarea={tarea} />
+          <Panel estado={estado} tarea={tarea} salud={salud} />
         )}
       </main>
 

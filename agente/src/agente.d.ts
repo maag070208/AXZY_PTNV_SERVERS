@@ -1,5 +1,6 @@
 export type Plataforma = "win32" | "darwin" | "linux";
-export type NombreTarea = "actualizar" | "clonar" | "aplicar" | "respaldar";
+export type NombreTarea = "actualizar" | "clonar" | "aplicar" | "respaldar" | "reiniciar" | "limpiar";
+export type Servicio = "api" | "web" | "postgres";
 export type EstadoHerramienta = "ok" | "falta" | "apagado" | "permiso";
 
 export interface Resultado {
@@ -31,6 +32,31 @@ export interface Respaldo {
   bytes: number;
 }
 
+export interface EstadoServidor {
+  docker: "ok" | "apagado" | "desconocido";
+  servicios: { servicio: Servicio; estado: string; salud: string; detalle: string }[];
+  usoDocker: { tipo: string; tamano: string; recuperable: string }[];
+  disco: { total: number; libre: number } | null;
+}
+
+export interface Reloj {
+  serie: string;
+  nombre: string | null;
+  url: string | null;
+  cuenta: boolean;
+  sincronizado: string | null;
+  checadas: number;
+  ultima: string | null;
+  enRed: boolean | null;
+}
+
+export interface Direccion {
+  interfaz: string;
+  ip: string;
+  url: string;
+  accesible: boolean;
+}
+
 export interface Campo {
   clave: string;
   valor: string;
@@ -58,7 +84,18 @@ declare global {
       abrirLogs: () => Promise<void>;
       abrirRespaldos: () => Promise<void>;
       revisarSalud: () => Promise<void>;
+      estadoServidor: () => Promise<EstadoServidor>;
+      relojes: () => Promise<Reloj[]>;
+      direcciones: () => Promise<Direccion[]>;
+      abrirWeb: (url?: string) => Promise<void>;
+      reiniciar: (servicio: Servicio | "todo") => Promise<void>;
+      limpiar: () => Promise<void>;
+      verLogs: (servicio: Servicio) => Promise<void>;
+      detenerLogs: () => Promise<void>;
+      paqueteSoporte: () => Promise<string>;
       onLinea: (callback: (linea: string) => void) => () => void;
+      onInicio: (callback: (tarea: NombreTarea) => void) => () => void;
+      onLogs: (callback: (lineas: string[]) => void) => () => void;
       onFin: (callback: (resultado: Resultado) => void) => () => void;
       onSalud: (callback: (enLinea: boolean) => void) => () => void;
     };

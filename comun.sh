@@ -39,12 +39,13 @@ borrar_viejos() { # carpeta patron cuantos_guardar
 
 terminar_log() { borrar_viejos logs '*.log' "$LOGS_A_GUARDAR"; }
 
-# Con sudo solo si el usuario no esta en el grupo docker.
 DOCKER=(docker)
 dk() { "${DOCKER[@]}" "$@"; }
 
-asegurar_docker() {
-    command -v docker >/dev/null || falla "No encuentro 'docker' (en Windows se busca dentro de WSL)."
+# Deja DOCKER listo (con sudo si el usuario no esta en el grupo docker) y
+# dice si Docker responde, sin intentar arrancarlo.
+docker_responde() {
+    command -v docker >/dev/null || return 1
     local salida
     salida=$(docker info 2>&1) && return 0
     if grep -qi 'permission denied' <<<"$salida"; then
@@ -52,6 +53,12 @@ asegurar_docker() {
         [[ -t 0 ]] && DOCKER=(sudo docker)
         dk info >/dev/null 2>&1 && return 0
     fi
+    return 1
+}
+
+asegurar_docker() {
+    command -v docker >/dev/null || falla "No encuentro 'docker' (en Windows se busca dentro de WSL)."
+    docker_responde && return 0
     echo "Docker no esta corriendo: intentando arrancarlo..."
     if [[ $(uname) == Darwin ]]; then
         open -a Docker 2>/dev/null || true
@@ -67,6 +74,37 @@ asegurar_docker() {
         sleep 5
     done
     falla "Docker no responde. Abre Docker Desktop, o en Linux/WSL corre 'sudo service docker start', y vuelve a intentar."
+}
+
+ESPERA_SEGUNDOS=180
+URL_API=http://localhost:4001/api/v1/health
+URL_WEB=http://localhost:8080/api/v1/health
+
+esperar_url() { # url nombre
+    local limite=$((SECONDS + ESPERA_SEGUNDOS)) codigo
+    printf 'Esperando %s' "$2"
+    while ((SECONDS < limite)); do
+        codigo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$1")
+        if [[ $codigo == 200 ]]; then
+            printf '\n'
+            bien "$2 responde (200 en $1)."
+            return 0
+        fi
+        printf '.'
+        sleep 3
+    done
+    printf '\n'
+    return 1
+}
+
+# Espera a que el API y la web respondan; si no, muestra el log del API y falla.
+esperar_sistema() {
+    if ! esperar_url "$URL_API" "API"; then
+        echo "Ultimas lineas del API:"
+        dk compose logs --tail 60 api
+        falla "El API no respondio en $ESPERA_SEGUNDOS segundos ($URL_API)."
+    fi
+    esperar_url "$URL_WEB" "Web" || falla "La web no llega al API ($URL_WEB)."
 }
 
 # Deja en RESPALDO la ruta del respaldo nuevo. La base se levanta primero: si el

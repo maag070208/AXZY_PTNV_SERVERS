@@ -22,8 +22,20 @@ export function useTarea(alTerminar?: (resultado: Resultado) => void) {
   const [avisos, setAvisos] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const limpiar = (tarea: NombreTarea) => {
+    setNombre(tarea);
+    setPasos([]);
+    setTotal(0);
+    setLineas([]);
+    setAvisos([]);
+    setError(null);
+    setFase("corriendo");
+  };
+
   useEffect(() => {
     const quitar = [
+      // Tambien llegan las que arrancan desde la bandeja o al iniciar sesion.
+      window.agente.onInicio(limpiar),
       window.agente.onLinea((linea) => {
         setLineas((previas) => [...previas.slice(-MAX_LINEAS), linea]);
         const paso = PATRON_PASO.exec(linea);
@@ -49,13 +61,7 @@ export function useTarea(alTerminar?: (resultado: Resultado) => void) {
 
   // Limpia el estado y lanza la tarea; si ni siquiera arranca, queda como error.
   const iniciar = async <T,>(tarea: NombreTarea, lanzar: () => Promise<T>): Promise<T | undefined> => {
-    setNombre(tarea);
-    setPasos([]);
-    setTotal(0);
-    setLineas([]);
-    setAvisos([]);
-    setError(null);
-    setFase("corriendo");
+    limpiar(tarea);
     try {
       return await lanzar();
     } catch (e) {

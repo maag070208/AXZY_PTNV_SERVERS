@@ -13,9 +13,6 @@
 
 TOTAL_PASOS=7
 MENSAJE_FALLA="La actualizacion se detuvo en ese paso."
-ESPERA_SEGUNDOS=180
-URL_API=http://localhost:4001/api/v1/health
-URL_WEB=http://localhost:8080/api/v1/health
 IMAGENES=(axzydev/axzy_ptnv_api:latest axzydev/axzy_ptnv_web:latest)
 source "$(dirname "$0")/comun.sh"
 
@@ -33,23 +30,6 @@ avisar_variables_nuevas() {
 }
 
 id_imagen() { dk image inspect --format '{{.Id}}' "$1" 2>/dev/null; }
-
-esperar_url() { # url nombre
-    local limite=$((SECONDS + ESPERA_SEGUNDOS)) codigo
-    printf 'Esperando %s' "$2"
-    while ((SECONDS < limite)); do
-        codigo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$1")
-        if [[ $codigo == 200 ]]; then
-            printf '\n'
-            bien "$2 responde (200 en $1)."
-            return 0
-        fi
-        printf '.'
-        sleep 3
-    done
-    printf '\n'
-    return 1
-}
 
 main() {
     iniciar_log actualizar
@@ -92,12 +72,7 @@ main() {
     dk compose up -d --remove-orphans || falla "No se pudieron levantar los contenedores."
 
     titulo "Revisar que el sistema responda"
-    if ! esperar_url "$URL_API" "API"; then
-        echo "Ultimas lineas del API:"
-        dk compose logs --tail 60 api
-        falla "El API no respondio en $ESPERA_SEGUNDOS segundos ($URL_API)."
-    fi
-    esperar_url "$URL_WEB" "Web" || falla "La web no llega al API ($URL_WEB)."
+    esperar_sistema
     dk compose ps
 
     titulo "Borrar imágenes viejas"

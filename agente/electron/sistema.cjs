@@ -216,4 +216,4 @@ function abrirDescarga(id, estado) {
   if (url) shell.openExternal(url);
 }
 
-module.exports = { PLATAFORMA, bash, revisarHerramientas, resolverHerramienta, abrirDescarga };
+module.exports = { PLATAFORMA, bash, correr, revisarHerramientas, resolverHerramienta, abrirDescarga };
