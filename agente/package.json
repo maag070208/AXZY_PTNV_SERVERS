@@ -1,0 +1,90 @@
+{
+  "name": "agente-puerto-nuevo",
+  "productName": "Agente Puerto Nuevo",
+  "description": "Actualiza Puerto Nuevo con un clic",
+  "author": "axzydev <aamaro@axzy.dev>",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.34.0",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "app": "vite build && electron .",
+    "build": "tsc --noEmit && vite build",
+    "icono": "electron build/icono.cjs",
+    "dist:win": "pnpm build && electron-builder --win",
+    "dist:mac": "pnpm build && electron-builder --mac",
+    "dist:linux": "pnpm build && electron-builder --linux"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@axzydev/axzy_ui_system": "1.3.3",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/react": "19.0.8",
+    "@types/react-dom": "19.0.3",
+    "@vitejs/plugin-react-swc": "3.8.0",
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-icons": "^5.5.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "~5.7.2",
+    "vite": "^6.1.0"
+  },
+  "build": {
+    "appId": "dev.axzy.puertonuevo.agente",
+    "productName": "Agente Puerto Nuevo",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**",
+      "dist/**",
+      "build/icon.png"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "shortcutName": "Actualizar Puerto Nuevo",
+      "artifactName": "Agente-Puerto-Nuevo-Setup-${version}.${ext}"
+    },
+    "icon": "build/icon.png",
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.utilities",
+      "artifactName": "Agente-Puerto-Nuevo-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Utility",
+      "artifactName": "Agente-Puerto-Nuevo-${version}.${ext}"
+    }
+  }
+}

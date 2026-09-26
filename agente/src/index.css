@@ -1,0 +1,17 @@
+@layer theme, base, axzy-ui-system, components, utilities;
+
+@import "tailwindcss";
+@import "@axzydev/axzy_ui_system/dist/index.css" layer(axzy-ui-system);
+
+@source "../node_modules/@axzydev/axzy_ui_system/src/**/*.{ts,tsx}";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--it-layout-bg);
+}
