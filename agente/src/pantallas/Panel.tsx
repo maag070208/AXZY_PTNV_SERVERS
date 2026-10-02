@@ -119,18 +119,20 @@ export default function Panel({ estado, tarea, salud }: Props) {
       )}
 
       {tarea.nombre && tarea.fase !== "libre" && (
-        <ITCard>
-          <div className="flex flex-col gap-4 py-2">
-            <Progreso tarea={tarea} titulos={TITULOS[tarea.nombre]} descripcionOk={TITULOS[tarea.nombre].descripcion} />
-            {!corriendo && (
-              <div className="flex flex-wrap justify-end gap-2">
-                <ITButton label="Cerrar" variant="text" onClick={tarea.reiniciar} />
-                {tarea.fase === "error" && <Soporte compacto />}
-                {tarea.fase === "error" && <ITButton label="Reintentar" icon={<FaArrowsRotate />} onClick={reintentar[tarea.nombre]} />}
-              </div>
-            )}
-          </div>
-        </ITCard>
+        <Progreso
+          tarea={tarea}
+          titulos={TITULOS[tarea.nombre]}
+          descripcionOk={TITULOS[tarea.nombre].descripcion}
+          onCerrar={tarea.reiniciar}
+          acciones={
+            tarea.fase === "error" && (
+              <>
+                <Soporte compacto />
+                <ITButton label="Reintentar" icon={<FaArrowsRotate />} onClick={reintentar[tarea.nombre]} />
+              </>
+            )
+          }
+        />
       )}
 
       <ITTabs items={pestanas} variant="line" />
@@ -177,7 +179,7 @@ function EditarConfiguracion({ tarea }: { tarea: Tarea }) {
       )}
       {!editando && !guardada && (
         <ITText muted className="text-xs">
-          Contraseñas, llaves de Ably, relojes checadores y S3 (archivo .env).
+          Contraseñas, llaves de Ably, relojes checadores y S3: con el formulario, o viendo y editando el archivo .env completo (y agregando variables nuevas).
         </ITText>
       )}
     </div>

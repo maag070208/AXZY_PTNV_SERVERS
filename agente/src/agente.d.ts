@@ -63,6 +63,15 @@ export interface Campo {
   ayuda: string;
   secreto: boolean;
   soloLectura: boolean;
+  /** No está en .env.example: alguien la agregó al .env a mano. */
+  adicional?: boolean;
+}
+
+export interface ArchivoEnv {
+  /** Si el .env todavía no existe (primera instalación) se muestra lo que se crearía. */
+  existe: boolean;
+  ruta: string;
+  texto: string;
 }
 
 declare global {
@@ -77,6 +86,8 @@ declare global {
       clonar: (padre: string) => Promise<{ carpeta: string; yaExistia: boolean }>;
       leerConfiguracion: () => Promise<Campo[]>;
       guardarConfiguracion: (valores: Record<string, string>) => Promise<void>;
+      leerEnv: () => Promise<ArchivoEnv>;
+      guardarEnv: (texto: string) => Promise<void>;
       aplicarConfiguracion: () => Promise<void>;
       actualizar: () => Promise<void>;
       respaldar: () => Promise<void>;

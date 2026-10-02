@@ -11,6 +11,8 @@ const CANALES = [
   "clonar",
   "leerConfiguracion",
   "guardarConfiguracion",
+  "leerEnv",
+  "guardarEnv",
   "aplicarConfiguracion",
   "actualizar",
   "respaldar",

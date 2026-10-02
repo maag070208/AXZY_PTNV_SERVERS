@@ -21,6 +21,9 @@ export function useTarea(alTerminar?: (resultado: Resultado) => void) {
   const [lineas, setLineas] = useState<string[]>([]);
   const [avisos, setAvisos] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Para el cronómetro de la tarjeta de avance.
+  const [inicio, setInicio] = useState<number | null>(null);
+  const [fin, setFin] = useState<number | null>(null);
 
   const limpiar = (tarea: NombreTarea) => {
     setNombre(tarea);
@@ -29,6 +32,8 @@ export function useTarea(alTerminar?: (resultado: Resultado) => void) {
     setLineas([]);
     setAvisos([]);
     setError(null);
+    setInicio(Date.now());
+    setFin(null);
     setFase("corriendo");
   };
 
@@ -52,6 +57,7 @@ export function useTarea(alTerminar?: (resultado: Resultado) => void) {
       }),
       window.agente.onFin((resultado) => {
         setFase(resultado.ok ? "ok" : "error");
+        setFin(Date.now());
         setError((previo) => previo ?? (resultado.ok ? null : "La tarea terminó con error. Revisa el detalle técnico."));
         alTerminar?.(resultado);
       }),
@@ -72,13 +78,15 @@ export function useTarea(alTerminar?: (resultado: Resultado) => void) {
 
   const reiniciar = () => {
     setNombre(null);
+    setInicio(null);
+    setFin(null);
     setFase("libre");
   };
 
   const actual = pasos.at(-1);
   const avance = fase === "ok" ? 100 : total && actual ? ((actual.n - 1) / total) * 100 : 3;
 
-  return { nombre, fase, pasos, total, actual, avance, lineas, avisos, error, iniciar, reiniciar, setFase };
+  return { nombre, fase, pasos, total, actual, avance, lineas, avisos, error, inicio, fin, iniciar, reiniciar, setFase };
 }
 
 export type Tarea = ReturnType<typeof useTarea>;

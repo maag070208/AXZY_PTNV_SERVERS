@@ -72,7 +72,7 @@ El archivo `.env` guarda las contraseñas/secretos del sistema **y NO se sube a 
 cp .env.example .env
 ```
 
-Edítalo (macOS: `nano .env` o `open -e .env`; Windows: `notepad .env`) y completa los valores.
+Edítalo (macOS: `nano .env` o `open -e .env`; Windows: `notepad .env`) y completa los valores. Con el Agente también se puede: **Ajustes → Configuración**, en el **formulario** (campo por campo, con la ayuda de `.env.example`, y un botón para agregar variables nuevas) o en **Archivo** (el `.env` completo tal cual, para verlo y corregirlo línea por línea).
 
 ### Variables del `.env`
 
@@ -149,7 +149,7 @@ Si algo falla, se detiene en ese paso y deja el detalle en `logs/` (manda ese ar
 
 **¿`Actualizar.cmd` en el escritorio?** Clic derecho → *Enviar a* → *Escritorio (crear acceso directo)*. Si en lugar de eso **copias** el archivo a otro lado, ábrelo con clic derecho → *Editar* y pon la ruta de la carpeta en `CARPETA` (sirve `C:\Users\...\AXZY_PTNV_SERVERS` o `/mnt/c/Users/.../AXZY_PTNV_SERVERS`).
 
-> ⚠️ `git pull` **no toca tu `.env`**. Si la configuración nueva trae variables, la actualización lo avisa (`AVISO: faltan en .env: …`): agrégalas con sus valores (tabla del paso 4, o en el Agente → Configuración) y vuelve a correrla.
+> ⚠️ `git pull` **no toca tu `.env`**. Si la configuración nueva trae variables, la actualización lo avisa (`AVISO: faltan en .env: …`): agrégalas con sus valores (tabla del paso 4, o en el Agente → Ajustes → Configuración: aparecen solas en el formulario) y vuelve a correrla.
 
 ### Actualización automática (opcional)
 
@@ -258,7 +258,37 @@ Si otro programa usa esos puertos, detenlo o cambia el mapeo en `docker-compose.
 ### Relojes checadores: "La API no tiene el usuario de los relojes"
 
 1. Pon `CHECADOR_USER` y `CHECADOR_PASS` en `.env` (paso 4) y corre `docker compose up -d`.
+   Si el mensaje sigue saliendo, es que la actualización no se aplicó: el API lee
+   esas credenciales (acepta también los nombres nuevos `TIME_CLOCK_USER` /
+   `TIME_CLOCK_PASS`) y hay que bajar la imagen nueva.
 2. En la web, **Configuración → Relojes checadores**, da de alta cada reloj con su dirección (ej. `https://192.168.1.135`) y marca si cuenta para entradas/salidas.
+
+### El reloj no conecta: cómo saber por qué
+
+El mensaje de la web ya distingue los dos casos (`rechazó el usuario y la
+contraseña` vs `No se pudo conectar`), y este comando lo confirma desde el
+contenedor del API (cambia la IP por la del reloj; está en **Configuración →
+Relojes checadores**):
+
+```bash
+docker compose exec api node -e "fetch('https://192.168.1.135/ISAPI/System/deviceInfo').then(r=>console.log('HTTP', r.status)).catch(e=>console.log('ERROR', e.message))"
+```
+
+- `HTTP 401` → **la red está bien** y el reloj está pidiendo credenciales: revisa
+  `CHECADOR_USER` / `CHECADOR_PASS` en `.env`.
+- `HTTP 200` → la red y el reloj responden; si la web falla, revisa que la URL
+  del reloj (con su `https://` o `http://`) sea la misma.
+- `ERROR ... ECONNREFUSED` / `ETIMEDOUT` / `EHOSTUNREACH` → **no hay camino al
+  reloj**: IP o puerto equivocados, el reloj en otra red, o el equipo apagado.
+  Comprueba desde el Windows: `curl https://192.168.1.135/ISAPI/System/deviceInfo`.
+- Si el reloj usa un certificado autofirmado en `https`, el sistema lo acepta;
+  lo que no se puede es dejar la URL con `http://` si el equipo solo atiende `https`.
+
+Para ver la URL con la que está dado de alta cada reloj:
+
+```bash
+docker compose exec postgres psql -U cartas -d cartas -c 'SELECT "serialNumber", url, "countsAttendance" FROM time_clocks;'
+```
 
 Los relojes, sus checadas y los vínculos con los empleados viven en la base de datos, no en las imágenes: una instalación nueva empieza sin relojes. Al dar de alta un reloj se descarga su historial en segundo plano (puede tardar si tiene muchos eventos).
 

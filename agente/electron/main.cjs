@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { PLATAFORMA, bash, revisarHerramientas, resolverHerramienta, abrirDescarga } = require("./sistema.cjs");
-const { leerConfiguracion, guardarConfiguracion } = require("./configuracion.cjs");
+const { leerConfiguracion, guardarConfiguracion, leerArchivoEnv, guardarArchivoEnv } = require("./configuracion.cjs");
 const { OPERAR, exigirOperar, estadoServidor, relojes, direcciones, paqueteSoporte } = require("./servidor.cjs");
 const { crearBandeja, notificar, cambiarInicioAutomatico, arrancoConLaSesion } = require("./bandeja.cjs");
 
@@ -341,6 +341,8 @@ const manejadores = {
   clonar: (padre) => clonar(padre),
   leerConfiguracion: () => leerConfiguracion(exigirCarpeta()),
   guardarConfiguracion: (valores) => guardarConfiguracion(exigirCarpeta(), valores),
+  leerEnv: () => leerArchivoEnv(exigirCarpeta()),
+  guardarEnv: (texto) => guardarArchivoEnv(exigirCarpeta(), texto),
   aplicarConfiguracion: () => aplicarConfiguracion(),
   actualizar: () => actualizar(),
   respaldar: () => respaldar(),
