@@ -45,9 +45,15 @@ services:
       AWS_REGION: ${AWS_REGION:-us-east-2}
     ports:
       - "4001:4001"
-    # Migraciones + seed automático al iniciar, luego arranca el API
+    # Al arrancar: aplica migraciones y levanta el API. El SEED no va aquí.
+    #   - En una base con datos del cliente no debe tocar nada, y si la base
+    #     quedara a medias el seed aborta y el API no arrancaría.
+    #   - El seed es manual y de una sola vez (instalación nueva, base vacía):
+    #     docker compose exec api npx prisma db seed
+    # Se deja explícito (y no el CMD de la imagen) para no depender de la
+    # versión de la imagen que haya en el servidor.
     command: >
-      sh -c "npx prisma migrate deploy && node dist/prisma/seed.js && node dist/src/index.js"
+      sh -c "npx prisma migrate deploy && node dist/src/index.js"
 
   web:
     image: axzydev/axzy_ptnv_web:latest

@@ -97,7 +97,13 @@ Si no pones `ABLY_API_KEY`, el API **arranca igual** pero el realtime de tickets
 docker compose up -d
 ```
 
-La primera vez baja las imágenes, crea la base de datos y corre las **migraciones + seed automáticamente**. Espera unos segundos y verifica:
+Al arrancar, el API aplica las **migraciones pendientes** y nada más: **el seed NO corre solo** (ver «¿La actualización toca mis datos?»). En una **instalación nueva** (base vacía) hay que cargar los datos iniciales UNA vez, a mano:
+
+```bash
+docker compose exec api npx prisma db seed
+```
+
+Espera unos segundos y verifica:
 
 ```bash
 docker compose ps
@@ -221,7 +227,7 @@ docker compose ps                          # estado de los servicios
 docker compose logs -f api                 # logs del API en vivo (Ctrl+C para salir)
 docker compose logs api                    # últimas líneas de log del API
 docker compose logs -f web                 # logs de la web (nginx)
-docker compose restart api                 # reiniciar solo el API (aplica migraciones/seed de nuevo)
+docker compose restart api                 # reiniciar solo el API (reaplica migraciones; NO toca tus datos)
 docker compose restart web                 # reiniciar solo la web
 docker compose down                        # detener todo (NO borra la base de datos)
 docker compose down -v                     # detener y BORRAR la base de datos (⚠️ pierde TODOS los datos)
@@ -269,8 +275,58 @@ Los relojes, sus checadas y los vínculos con los empleados viven en la base de 
 
 ---
 
-## 10. Notas
+## 10. ¿La actualización toca mis datos?
+
+**No borra ni reemplaza nada.** Lo que corre al actualizar es:
+
+1. **Respaldo completo** de la base en `respaldos/` (paso 3 de `actualizar.sh`).
+2. **`prisma migrate deploy`**: aplica los cambios de estructura. Las migraciones
+   de este sistema **solo agregan** tablas, columnas e índices, o **convierten**
+   una columna conservando sus valores (p. ej. el rol pasó de lista fija a
+   catálogo). Ninguna borra datos del cliente.
+3. **Reinicio** con la versión nueva.
+
+Si una migración **no puede** aplicarse porque los datos actuales no cumplen una
+regla nueva (por ejemplo, dos equipos con el mismo número de serie), se detiene
+**antes** de reiniciar: el sistema sigue funcionando con la versión anterior y el
+detalle queda en `logs/`. El respaldo está intacto; se corrige el dato y se
+vuelve a correr.
+
+**El seed NO se ejecuta al arrancar ni al actualizar.** Es el único comando que
+puede reemplazar datos (carga el respaldo de `prisma/seed-data/`), así que es
+manual y deliberado:
+
+```bash
+docker compose exec api npx prisma db seed     # solo instalación NUEVA (base vacía)
+npm run cutover                                # corte deliberado: REEMPLAZA los datos
+```
+
+Si algún día corres el seed en una base que ya tiene datos, **no toca nada**: lo
+detecta y lo dice (`Seed omitido: la BD ya tiene N usuarios`). Para cuadrar el
+inventario a mano existe `npm run inventory:reconcile`, que es explícito.
+
+> Regla: **si el sistema ya tiene datos del cliente, nunca corras el seed ni el
+> cutover.** Para actualizar solo se necesitan las migraciones, que es lo que
+> hace `Actualizar.cmd`.
+
+### Cuadrar el inventario (una sola vez, opcional)
+
+El inventario trae avisos heredados del sistema anterior (renglones de entrada
+sin sus piezas ligadas). No afectan las existencias: es la trazabilidad del
+kardex. Se cuadran con un comando, **explícito y de una sola vez**:
+
+```bash
+docker compose exec -e INVENTORY_RECONCILE_REMOTE=1 api node dist/prisma/reconcile-inventory.js
+```
+
+Es idempotente (correrlo otra vez no cambia nada) y solo liga piezas y ajusta
+saldos cuando de verdad no cuadran. Se pide `INVENTORY_RECONCILE_REMOTE=1` a
+propósito: el comando **escribe** en el inventario, así que nunca corre solo.
+
+---
+
+## 11. Notas
 
 - La base de datos se guarda en el **volumen** `ptnv_pgdata`: tus datos no se pierden con `docker compose down`, solo con `docker compose down -v`.
-- Al iniciar, el API ejecuta automáticamente `prisma migrate deploy` y el **seed** (idempotente) antes de arrancar.
+- Al iniciar, el API ejecuta automáticamente `prisma migrate deploy` y arranca. **El seed no corre automáticamente**: se corre a mano y solo en una instalación nueva (base vacía) o en un corte deliberado.
 - Cambia SIEMPRE `POSTGRES_PASSWORD` y `JWT_SECRET` en `.env` antes de ir a producción.
