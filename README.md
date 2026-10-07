@@ -4,7 +4,7 @@ Repositorio para **desplegar** el sistema completo (API + Web + Base de datos) e
 
 > ⚠️ Aquí **no se compila código**: este repo baja las imágenes ya publicadas en Docker Hub (`axzydev/axzy_ptnv_api` y `axzydev/axzy_ptnv_web`) y solo las orquesta.
 
-> 🖱️ **Lo más fácil: el Agente Puerto Nuevo** (Windows, macOS y Linux). Es una app con ícono que revisa si tienes Git y Docker (y WSL en Windows) y te dice qué descargar si falta algo, descarga este repositorio, arma el `.env`, instala, actualiza y respalda con un clic. Instaladores: `Agente-Puerto-Nuevo-Setup-<versión>.exe` (Windows), `.dmg` (macOS) y `.AppImage` (Linux); ver [agente/README.md](agente/README.md). Los pasos 2 a 5 de abajo son lo mismo, a mano.
+> 🖱️ **Lo más fácil: el Agente Puerto Nuevo** (Windows y Linux). Es una app con ícono que revisa si tienes Git y Docker (y WSL en Windows) y te dice qué descargar si falta algo, descarga este repositorio, arma el `.env`, instala, actualiza y respalda con un clic. Instaladores: `Agente-Puerto-Nuevo-Setup-<versión>.exe` (Windows) y `.AppImage` (Linux); ver [agente/README.md](agente/README.md). Los pasos 2 a 5 de abajo son lo mismo, a mano.
 
 ---
 
@@ -138,7 +138,7 @@ docker compose ps
 Los pasos (`actualizar.sh`):
 
 1. Revisa que Docker responda (en Windows, dentro de WSL; si no, intenta arrancarlo).
-2. Trae la configuración nueva de este repositorio (`git pull`).
+2. **Revierte los cambios locales de este repositorio** (si los hay, con respaldo en `logs/cambios-locales-*.patch`) y trae la configuración nueva (`git pull`). Es un repositorio del sistema, no del cliente: nunca toca `.env`, `respaldos/`, `logs/` ni `soporte/`.
 3. Respalda la base de datos en `respaldos/` (ver «Respaldar la base de datos»).
 4. Baja las imágenes nuevas del API y la web (`docker compose pull`) y dice cuál trae versión nueva.
 5. Aplica las migraciones (`npx prisma migrate deploy`). **Si fallan, se detiene aquí y el sistema sigue con la versión anterior.**

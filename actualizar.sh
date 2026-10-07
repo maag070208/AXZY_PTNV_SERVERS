@@ -31,6 +31,35 @@ avisar_variables_nuevas() {
 
 id_imagen() { dk image inspect --format '{{.Id}}' "$1" 2>/dev/null; }
 
+# Este repositorio es del SISTEMA, no del cliente: manda lo que trae git. Si el
+# servidor quedó con archivos modificados a mano, el pull se detendría (pasó en
+# el cliente el 07/10/2026), así que se REVIERTEN antes de traer lo nuevo.
+# No toca .env, logs/, respaldos/ ni soporte/: están en .gitignore, git no los ve.
+revertir_cambios_locales() {
+    local git_cmd=(git -c safe.directory="$PWD" -c core.fileMode=false)
+    local pendientes
+    pendientes=$("${git_cmd[@]}" status --porcelain | wc -l | tr -d ' ')
+    if [[ "$pendientes" == "0" ]]; then
+        echo "  sin cambios locales."
+        return
+    fi
+    aviso "$pendientes archivo(s) con cambios locales: se revierten antes de actualizar."
+    mkdir -p logs
+    # Respaldo de lo que había (por si alguien editó algo a propósito).
+    "${git_cmd[@]}" diff > "logs/cambios-locales-$(date '+%Y%m%d-%H%M%S').patch" 2>/dev/null || true
+    "${git_cmd[@]}" checkout -- .
+    bien "  cambios locales revertidos (respaldo en logs/)."
+}
+
+# Un archivo SIN rastrear que choque con lo que viene también detiene el pull
+# ("untracked working tree files would be overwritten"). Se aparta con stash
+# (recuperable con `git stash pop`) en vez de borrarse.
+apartar_sin_rastrear() {
+    aviso "quedan archivos sin rastrear que estorban: se apartan con git stash."
+    git -c safe.directory="$PWD" -c core.fileMode=false stash push -u \
+        -m "actualizar $(date '+%Y-%m-%d %H:%M')" >/dev/null 2>&1 || true
+}
+
 main() {
     iniciar_log actualizar
 
@@ -43,8 +72,12 @@ main() {
     titulo "Traer la configuración nueva (git pull)"
     # Sin nadie frente a la PC, git no debe quedarse esperando usuario o contrasena.
     # En /mnt/c los permisos de archivo no son confiables: se ignoran.
-    GIT_TERMINAL_PROMPT=0 git -c safe.directory="$PWD" -c core.fileMode=false pull --ff-only \
-        || falla "git pull no pudo traer los cambios."
+    revertir_cambios_locales
+    if ! GIT_TERMINAL_PROMPT=0 git -c safe.directory="$PWD" -c core.fileMode=false pull --ff-only; then
+        apartar_sin_rastrear
+        GIT_TERMINAL_PROMPT=0 git -c safe.directory="$PWD" -c core.fileMode=false pull --ff-only \
+            || falla "git pull no pudo traer los cambios."
+    fi
     avisar_variables_nuevas
 
     titulo "Respaldar la base de datos"

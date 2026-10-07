@@ -3,7 +3,7 @@
   "productName": "Agente Puerto Nuevo",
   "description": "Actualiza Puerto Nuevo con un clic",
   "author": "axzydev <aamaro@axzy.dev>",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "packageManager": "pnpm@10.34.0",
   "main": "electron/main.cjs",
@@ -12,9 +12,10 @@
     "app": "vite build && electron .",
     "build": "tsc --noEmit && vite build",
     "icono": "electron build/icono.cjs",
-    "dist:win": "pnpm build && electron-builder --win",
-    "dist:mac": "pnpm build && electron-builder --mac",
-    "dist:linux": "pnpm build && electron-builder --linux"
+    "limpiar": "node build/limpiar-release.cjs",
+    "dist:win": "pnpm build && electron-builder --win && node build/limpiar-release.cjs",
+    "dist:mac": "pnpm build && electron-builder --mac && node build/limpiar-release.cjs",
+    "dist:linux": "pnpm build && electron-builder --linux && node build/limpiar-release.cjs"
   },
   "dependencies": {
     "fflate": "0.8.3"

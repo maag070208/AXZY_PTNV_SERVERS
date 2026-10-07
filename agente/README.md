@@ -26,13 +26,15 @@ pnpm icono        # regenera build/icon.png y los de la bandeja desde build/icon
 
 ## Instaladores
 
-Se construyen desde macOS, sin Wine. Quedan en `release/`:
+Se construyen desde macOS, sin Wine. Quedan en `release/` y al terminar cada `pnpm dist:*` se limpia `release/`: se borran los instaladores de versiones anteriores y las carpetas de trabajo, así que solo quedan los archivos de la versión de `package.json`:
 
 ```bash
 pnpm dist:win     # Agente-Puerto-Nuevo-Setup-<versión>.exe (x64): instala y crea el acceso directo "Actualizar Puerto Nuevo"
-pnpm dist:mac     # Agente-Puerto-Nuevo-<versión>-arm64.dmg y -x64.dmg
 pnpm dist:linux   # Agente-Puerto-Nuevo-<versión>.AppImage (x64)
+pnpm limpiar      # limpiar release/ a mano (lo mismo que hace cada dist:* al terminar)
 ```
+
+El release que se sube es **Windows** y **Linux**. `pnpm dist:mac` sigue existiendo para probar en una Mac, pero no se publica.
 
 No están firmados para distribución:
 
