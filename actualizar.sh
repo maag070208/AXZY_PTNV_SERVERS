@@ -60,6 +60,23 @@ apartar_sin_rastrear() {
         -m "actualizar $(date '+%Y-%m-%d %H:%M')" >/dev/null 2>&1 || true
 }
 
+# En Windows con Docker Desktop, el `~/.docker/config.json` de la distro puede
+# traer `"credsStore": "desktop"`, que manda a ejecutar
+# `docker-credential-desktop.exe` DENTRO de Linux: eso no corre ("exec format
+# error") y el pull se cae aunque la imagen sea pública. Se aparta esa entrada
+# (con respaldo) y se vuelve a intentar. Devuelve 0 solo si cambió algo.
+reparar_credenciales_docker() {
+    local config="$HOME/.docker/config.json"
+    [[ -f "$config" ]] || return 1
+    grep -qE '"(credsStore|credHelpers)"' "$config" || return 1
+    cp "$config" "$config.bak-$(date '+%Y%m%d-%H%M%S')"
+    # Sin `sed -i`: en macOS (BSD) no acepta el sufijo vacío y este script también
+    # corre en Mac. Se filtra a un temporal y se reemplaza.
+    grep -vE '"(credsStore|credHelpers)"' "$config" > "$config.tmp" && mv "$config.tmp" "$config"
+    aviso "El ayudante de credenciales de Docker no funciona en WSL: se apartó (respaldo en ~/.docker/) y se reintenta."
+    return 0
+}
+
 main() {
     iniciar_log actualizar
 
@@ -86,7 +103,10 @@ main() {
     titulo "Bajar las imágenes nuevas"
     local antes=() imagen i
     for imagen in "${IMAGENES[@]}"; do antes+=("$(id_imagen "$imagen")"); done
-    dk compose pull || falla "No se pudieron bajar las imagenes (revisa el internet)."
+    if ! dk compose pull; then
+        reparar_credenciales_docker && dk compose pull \
+            || falla "No se pudieron bajar las imagenes. Si dice 'unauthorized', entra a WSL y corre: docker login"
+    fi
     for i in "${!IMAGENES[@]}"; do
         if [[ $(id_imagen "${IMAGENES[i]}") == "${antes[i]}" ]]; then
             echo "  ${IMAGENES[i]}: sin cambios"

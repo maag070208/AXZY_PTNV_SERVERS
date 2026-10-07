@@ -2,6 +2,7 @@
 // dentro de WSL), que herramientas hay y como instalar las que faltan.
 const { shell } = require("electron");
 const { spawn, spawnSync } = require("node:child_process");
+const fs = require("node:fs");
 const os = require("node:os");
 
 const PLATAFORMA = process.platform; // "win32" | "darwin" | "linux"
@@ -51,12 +52,26 @@ function argsWsl(args) {
   return distro ? ["-d", distro, ...args] : args;
 }
 
+// La carpeta que se le da a `spawn` es del lado WINDOWS: tiene que existir de
+// verdad. Con una ruta tipo `~` (o una carpeta que ya no está) el proceso ni
+// arranca — "spawn wsl.exe ENOENT" — y todo salia como "no instalado" aunque
+// estuviera instalado. Si no sirve, se usa el home del usuario.
+function carpetaValida(carpeta) {
+  try {
+    if (carpeta && fs.statSync(carpeta).isDirectory()) return carpeta;
+  } catch {
+    // No existe o no se puede leer: se cae al home.
+  }
+  return os.homedir();
+}
+
 // Proceso bash en `carpeta` (en Windows, dentro de WSL). --exec evita que wsl.exe
 // pase la linea por otro shell y cambie las comillas.
 function bash(args, carpeta) {
-  const opciones = { cwd: carpeta, env: entorno(), stdio: ["ignore", "pipe", "pipe"], windowsHide: true };
+  const base = carpetaValida(carpeta);
+  const opciones = { cwd: base, env: entorno(), stdio: ["ignore", "pipe", "pipe"], windowsHide: true };
   return ES_WINDOWS
-    ? spawn("wsl.exe", [...argsWsl(["--cd", carpeta]), "--exec", "bash", ...args], opciones)
+    ? spawn("wsl.exe", [...argsWsl(["--cd", base]), "--exec", "bash", ...args], opciones)
     : spawn("bash", args, opciones);
 }
 
@@ -182,12 +197,21 @@ async function revisarHerramientas() {
     }
   }
 
-  // En el home de la distro y con shell de LOGIN (`-lc`): asi el PATH es el del
-  // usuario y encuentra git aunque este en /snap/bin o lo ponga el perfil.
-  const { salida } = await correr(["-lc", SONDA], "~");
+  // En el home del usuario (ruta de Windows, que WSL traduce a /mnt/c/...) y con
+  // shell de LOGIN (`-lc`): asi el PATH es el del usuario y encuentra git aunque
+  // este en /snap/bin o lo ponga el perfil.
+  const { salida } = await correr(["-lc", SONDA], os.homedir());
   const valor = (clave) => (salida.match(new RegExp(`^${clave}=(.*)$`, "m"))?.[1] ?? "").trim();
+  // Sin ni una linea de la sonda el problema NO es que falten herramientas: es
+  // que no se pudo preguntar. Se dice tal cual para no mandar a instalar de gusto.
+  const sondaFallo = !/^git=/m.test(salida);
   const docker = valor("docker");
-  agregar("git", "Git", valor("git") ? "ok" : "falta", valor("git").replace(/^git version /, ""));
+  agregar(
+    "git",
+    "Git",
+    valor("git") ? "ok" : "falta",
+    valor("git").replace(/^git version /, "") || (sondaFallo ? `No se pudo consultar WSL (${salida.trim().slice(0, 120) || "sin respuesta"})` : "")
+  );
   agregar("docker", "Docker", docker ? valor("docker_estado") || "apagado" : "falta", docker.replace(/^Docker version /, "").split(",")[0]);
   agregar("compose", "Docker Compose", valor("compose") ? "ok" : "falta", valor("compose"));
   agregar("curl", "curl", valor("curl") ? "ok" : "falta", valor("curl").replace(/^curl /, ""));
@@ -213,7 +237,7 @@ function abrirTerminal(comando, { admin } = {}) {
   }
   if (ES_WINDOWS) {
     // detached: Windows le da su propia ventana de consola.
-    lanzar("wsl.exe", [...argsWsl(["--cd", "~"]), "--exec", "bash", "-c", conPausa(comando)]);
+    lanzar("wsl.exe", [...argsWsl(["--exec", "bash", "-c", conPausa(comando)])]);
     return { ok: true };
   }
   if (PLATAFORMA === "darwin") {
@@ -254,4 +278,4 @@ function abrirDescarga(id, estado) {
   if (url) shell.openExternal(url);
 }
 
-module.exports = { PLATAFORMA, bash, correr, revisarHerramientas, resolverHerramienta, abrirDescarga };
+module.exports = { PLATAFORMA, bash, correr, revisarHerramientas, resolverHerramienta, abrirDescarga, carpetaValida };
