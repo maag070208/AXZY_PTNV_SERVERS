@@ -81,9 +81,11 @@ Edítalo (macOS: `nano .env` o `open -e .env`; Windows: `notepad .env`) y comple
 | `POSTGRES_PASSWORD` | Contraseña de la base de datos | **Cámbiala** de `cartas_dev_pwd` por una contraseña propia/fuerte |
 | `JWT_SECRET` | Secreto con el que se firman los tokens de sesión | **Cámbialo** de `cambia_este_secreto_en_produccion` por una cadena larga y aleatoria |
 | `ABLY_API_KEY` | Key de Ably para el **realtime** de notificaciones de tickets | La misma key que ya usas en desarrollo (`ABLY_API_KEY` de `api/.env` o `VITE_ABLY_KEY` de `web/.env` — es el **mismo valor**) |
-| `CHECADOR_USER` / `CHECADOR_PASS` | Usuario y contraseña de los **relojes checadores** (los mismos para todos). El sistema solo lee de los relojes | Los del reloj. Si la contraseña lleva `$`, `#` o espacios, ponla entre comillas simples. Si la cambias en los relojes, cámbiala aquí también |
+| `CHECADOR_USER` / `CHECADOR_PASS` (o `TIME_CLOCK_USER` / `TIME_CLOCK_PASS`: son el mismo dato, llena solo uno de los dos pares) | Usuario y contraseña de los **relojes checadores** (los mismos para todos). El sistema solo lee de los relojes | Los del reloj. Si la contraseña lleva `$`, `#` o espacios, ponla entre comillas simples. Si la cambias en los relojes, cámbiala aquí también |
 | `ACCESS_REPORT_TIMEZONE` | Zona horaria de los reportes de entradas/salidas | `America/Tijuana` (hora del Pacífico, la de los relojes). Vacía = `America/Mexico_City` |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_BUCKET_NAME` / `AWS_REGION` | Bucket de S3 para los archivos (evidencias de tickets, fotos y documentos del personal) | Los de tu cuenta de AWS. Sin ellos las subidas fallan; lo demás funciona |
+
+> ⚠️ **Este `.env` es el que leen los contenedores** (el de la carpeta del servidor, junto al `docker-compose.yml`). El `.env` del repositorio del API **no** llega a producción: la imagen no lo incluye. Los cambios de este archivo se aplican al **recrear** el contenedor (`docker compose up -d`), no basta reiniciarlo.
 
 > ⚠️ **Importante**: usa SIEMPRE la misma `ABLY_API_KEY` que está en la web ya publicada. La web la trae incrustada desde la imagen; si pones una key distinta aquí, el API recibirá los eventos pero la web no los mostrará (no matchearán).
 

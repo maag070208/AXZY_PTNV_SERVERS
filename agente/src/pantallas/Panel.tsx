@@ -1,6 +1,6 @@
 import { ITAlert, ITButton, ITCard, ITTabs, ITText } from "@axzydev/axzy_ui_system";
 import { useState } from "react";
-import { FaArrowsRotate, FaClock, FaDatabase, FaGear, FaHouse, FaPowerOff, FaServer } from "react-icons/fa6";
+import { FaArrowsRotate, FaClock, FaDatabase, FaGear, FaHouse, FaPowerOff, FaServer, FaTerminal } from "react-icons/fa6";
 import type { EstadoAgente, NombreTarea } from "../agente";
 import Acceso from "../componentes/Acceso";
 import Configuracion from "../componentes/Configuracion";
@@ -11,6 +11,7 @@ import Relojes from "../componentes/Relojes";
 import Respaldos from "../componentes/Respaldos";
 import Servidores from "../componentes/Servidores";
 import Soporte from "../componentes/Soporte";
+import Terminal from "../componentes/Terminal";
 import { fecha } from "../formato";
 import { useHerramientas } from "../useHerramientas";
 import type { Tarea } from "../useTarea";
@@ -86,6 +87,7 @@ export default function Panel({ estado, tarea, salud }: Props) {
     { id: "servidores", label: "Servidores", icon: <FaServer />, content: <ITCard><Servidores tarea={tarea} /></ITCard> },
     { id: "relojes", label: "Relojes", icon: <FaClock />, content: <ITCard><Relojes /></ITCard> },
     { id: "respaldos", label: "Respaldos", icon: <FaDatabase />, content: <ITCard><Respaldos tarea={tarea} /></ITCard> },
+    { id: "terminal", label: "Terminal", icon: <FaTerminal />, content: <ITCard><Terminal /></ITCard> },
     {
       id: "ajustes",
       label: "Ajustes",

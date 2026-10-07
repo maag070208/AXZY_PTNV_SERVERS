@@ -107,6 +107,11 @@ declare global {
       onLinea: (callback: (linea: string) => void) => () => void;
       onInicio: (callback: (tarea: NombreTarea) => void) => () => void;
       onLogs: (callback: (lineas: string[]) => void) => () => void;
+      terminalCorrer: (comando: string) => Promise<void>;
+      terminalDetener: () => Promise<void>;
+      onTermInicio: (callback: (dato: { comando: string }) => void) => () => void;
+      onTermSalida: (callback: (trozo: string) => void) => () => void;
+      onTermFin: (callback: (dato: { comando: string; codigo: number }) => void) => () => void;
       onFin: (callback: (resultado: Resultado) => void) => () => void;
       onSalud: (callback: (enLinea: boolean) => void) => () => void;
     };

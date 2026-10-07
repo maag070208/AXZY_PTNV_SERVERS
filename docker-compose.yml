@@ -21,6 +21,15 @@ services:
     image: axzydev/axzy_ptnv_api:latest
     container_name: ptnv-api
     restart: unless-stopped
+    # Todo lo que haya en el `.env` de esta carpeta entra al contenedor (lo de
+    # abajo solo completa valores por defecto): así una variable nueva —relojes,
+    # S3, correo— funciona sin tocar este archivo. OJO: los cambios del `.env` se
+    # aplican al RECREAR el contenedor (`docker compose up -d`), no al reiniciarlo.
+    env_file:
+      # `required: false`: si el .env todavía no existe (instalación nueva), el
+      # compose no falla; simplemente no aporta variables.
+      - path: .env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,14 +40,12 @@ services:
       JWT_SECRET: ${JWT_SECRET:-cambia_este_secreto_en_produccion}
       WEB_ORIGIN: "*"
       ABLY_API_KEY: ${ABLY_API_KEY:-}
-      # Relojes checadores: usuario de los relojes (el mismo para todos). El
-      # sistema solo les lee; los relojes se dan de alta desde la web.
-      # Relojes checadores Hikvision (SOLO LECTURA). El API lee TIME_CLOCK_USER,
-      # así que se le pasa con ese nombre el valor del `.env` (que usa el nombre
-      # viejo CHECADOR_USER para no tener que cambiarlo en el servidor). El API
-      # también acepta el nombre viejo como sinónimo.
-      TIME_CLOCK_USER: ${CHECADOR_USER:-}
-      TIME_CLOCK_PASS: ${CHECADOR_PASS:-}
+      # Relojes checadores Hikvision (SOLO LECTURA). El API lee TIME_CLOCK_USER y
+      # acepta CHECADOR_USER como sinónimo; aquí se le pasan los dos nombres, con
+      # el valor que traiga el `.env` (el de esta carpeta, no el del repo del API),
+      # así que da igual cuál de los dos use quien lo llene.
+      TIME_CLOCK_USER: ${TIME_CLOCK_USER:-${CHECADOR_USER:-}}
+      TIME_CLOCK_PASS: ${TIME_CLOCK_PASS:-${CHECADOR_PASS:-}}
       # Zona horaria de los reportes de entradas/salidas. Vacía = America/Mexico_City.
       ACCESS_REPORT_TIMEZONE: ${ACCESS_REPORT_TIMEZONE:-}
       # Archivos (evidencias de tickets, fotos y documentos del personal) en S3.

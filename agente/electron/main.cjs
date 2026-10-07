@@ -5,7 +5,7 @@ const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { PLATAFORMA, bash, revisarHerramientas, resolverHerramienta, abrirDescarga } = require("./sistema.cjs");
+const { PLATAFORMA, bash, correr, revisarHerramientas, resolverHerramienta, abrirDescarga } = require("./sistema.cjs");
 const { leerConfiguracion, guardarConfiguracion, leerArchivoEnv, guardarArchivoEnv } = require("./configuracion.cjs");
 const { OPERAR, exigirOperar, estadoServidor, relojes, direcciones, paqueteSoporte } = require("./servidor.cjs");
 const { crearBandeja, notificar, cambiarInicioAutomatico, arrancoConLaSesion } = require("./bandeja.cjs");
@@ -100,8 +100,49 @@ function correrTarea(nombre, args, carpeta, alTerminar) {
   proceso.on("close", (codigo) => terminar(codigo));
 }
 
-function actualizar() {
-  correrTarea("actualizar", [`./${SCRIPT}`], exigirCarpeta(), ({ ok, fecha }) => guardarConfig({ ultima: { ok, fecha } }));
+// El repositorio de los scripts es del SISTEMA, no del cliente. Si el servidor
+// quedo con archivos modificados a mano (o con finales de linea de Windows),
+// `git pull` se niega a traer lo nuevo y la actualizacion se detiene en el paso 1
+// (le paso al cliente el 07/10/2026). El instalador del Agente SI se puede
+// reemplazar sin depender de ese pull, asi que la reparacion vive aqui: se
+// revierten esos archivos, se aparta lo que estorbe y se trae lo nuevo ANTES de
+// correr el script (que hara lo mismo, ya sin nada que hacer). No toca .env,
+// logs/, respaldos/ ni soporte/: estan en .gitignore, git no los ve.
+const GIT = 'git -c safe.directory="$PWD" -c core.fileMode=false';
+
+function correrEnRepo(carpeta, comando) {
+  return correr(["-c", `export GIT_TERMINAL_PROMPT=0; ${comando}`], carpeta);
+}
+
+async function prepararRepo(carpeta) {
+  try {
+    const estado = await correrEnRepo(carpeta, `${GIT} status --porcelain | wc -l`);
+    const pendientes = Number.parseInt((estado.salida || "").trim(), 10) || 0;
+    if (pendientes > 0) {
+      enviar("linea", `AVISO: ${pendientes} archivo(s) del repositorio con cambios locales; se revierten para poder actualizar.`);
+      await correrEnRepo(carpeta, `mkdir -p logs && ${GIT} diff > "logs/cambios-locales-$(date +%Y%m%d-%H%M%S).patch"`);
+      await correrEnRepo(carpeta, `${GIT} checkout -- .`);
+    }
+
+    let pull = await correrEnRepo(carpeta, `${GIT} pull --ff-only`);
+    if (pull.codigo !== 0 && /untracked working tree files would be overwritten/i.test(pull.salida)) {
+      enviar("linea", "AVISO: hay archivos sin rastrear que estorban al actualizar; se apartan con git stash.");
+      await correrEnRepo(carpeta, `${GIT} stash push -u -m "agente: antes de actualizar"`);
+      pull = await correrEnRepo(carpeta, `${GIT} pull --ff-only`);
+    }
+    if (pull.codigo !== 0) {
+      // No se corta aqui: el script lo reporta con su propio paso y su detalle.
+      enviar("linea", "AVISO: no se pudo traer la configuración nueva (git pull); sigue el script.");
+    }
+  } catch (error) {
+    enviar("linea", `AVISO: no se pudo revisar el repositorio (${error.message}).`);
+  }
+}
+
+async function actualizar() {
+  const carpeta = exigirCarpeta();
+  await prepararRepo(carpeta);
+  correrTarea("actualizar", [`./${SCRIPT}`], carpeta, ({ ok, fecha }) => guardarConfig({ ultima: { ok, fecha } }));
 }
 
 function clonar(padre) {
@@ -309,6 +350,44 @@ function crearVentana(visible) {
   else ventana.loadFile(path.join(__dirname, "..", "dist", "index.html"));
 }
 
+// --- Terminal: comandos sueltos dentro de WSL, en la carpeta del repositorio ---
+// Es la consola del servidor para soporte: `docker compose ps`, `git status`,
+// `./respaldar.sh`... Corre con `bash -lc` (el PATH y el perfil del usuario, como
+// si lo escribieras en WSL) y su salida se manda tal cual a la ventana.
+let terminal = null;
+
+function terminalCorrer(comando) {
+  if (terminal) throw new Error("Ya hay un comando corriendo.");
+  const texto = String(comando ?? "").trim();
+  if (!texto) return;
+  const proceso = bash(["-lc", texto], exigirCarpeta());
+  terminal = { proceso, texto };
+  enviar("termInicio", { comando: texto });
+  const leer = (trozo) => enviar("termSalida", trozo.toString("utf8"));
+  proceso.stdout.on("data", leer);
+  proceso.stderr.on("data", leer);
+  const terminar = (codigo, error) => {
+    if (!terminal) return;
+    terminal = null;
+    if (error) enviar("termSalida", `\n${error.message}\n`);
+    enviar("termFin", { comando: texto, codigo: codigo ?? -1 });
+  };
+  proceso.on("error", (error) => terminar(-1, error));
+  proceso.on("close", (codigo) => terminar(codigo));
+}
+
+function terminalDetener() {
+  if (!terminal) return;
+  const { proceso, texto } = terminal;
+  terminal = null;
+  proceso.kill(); // corta la salida en la ventana
+  enviar("termSalida", "\n^C detenido\n");
+  enviar("termFin", { comando: texto, codigo: 130 });
+  // wsl.exe muere, pero el comando de adentro puede seguir (p. ej. `logs -f`):
+  // se remata por su texto, que es lo que ve `pkill -f`. Sin acentos ni comillas.
+  correr(["-lc", `pkill -f -- ${JSON.stringify(texto)} >/dev/null 2>&1; true`], carpetaActual() ?? undefined);
+}
+
 const manejadores = {
   estado: () => {
     const carpeta = carpetaActual();
@@ -338,6 +417,8 @@ const manejadores = {
     }
     return { carpeta: carpetaActual(), error: `Esa carpeta no es ${NOMBRE_CARPETA} (no tiene ${SCRIPT} ni docker-compose.yml).` };
   },
+  terminalCorrer: (comando) => terminalCorrer(comando),
+  terminalDetener: () => terminalDetener(),
   clonar: (padre) => clonar(padre),
   leerConfiguracion: () => leerConfiguracion(exigirCarpeta()),
   guardarConfiguracion: (valores) => guardarConfiguracion(exigirCarpeta(), valores),

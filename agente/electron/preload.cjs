@@ -29,6 +29,8 @@ const CANALES = [
   "verLogs",
   "detenerLogs",
   "paqueteSoporte",
+  "terminalCorrer",
+  "terminalDetener",
 ];
 
 const escuchar = (canal) => (callback) => {
@@ -44,4 +46,7 @@ contextBridge.exposeInMainWorld("agente", {
   onSalud: escuchar("salud"),
   onInicio: escuchar("inicio"),
   onLogs: escuchar("logs"),
+  onTermInicio: escuchar("termInicio"),
+  onTermSalida: escuchar("termSalida"),
+  onTermFin: escuchar("termFin"),
 });
