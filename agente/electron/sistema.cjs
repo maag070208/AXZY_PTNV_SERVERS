@@ -16,12 +16,47 @@ function entorno() {
   return env;
 }
 
+// Distro de WSL que se usa. En Windows puede haber varias: la del usuario
+// (Ubuntu, Debian...) y las de Docker Desktop (`docker-desktop`,
+// `docker-desktop-data`). `wsl.exe` sin `-d` usa la PREDETERMINADA, que no
+// siempre es la del usuario: si Docker Desktop quedo como predeterminada, los
+// comandos corren en una distro sin git y sin /mnt/c — todo salia como "falta"
+// aunque git estuviera instalado en Ubuntu. Por eso se elige una distro de
+// verdad (prefiriendo Ubuntu) y se pasa con `-d` en todas las llamadas.
+let distroWsl;
+let distroBuscada = false;
+
+function listarDistros() {
+  const resultado = spawnSync("wsl.exe", ["-l", "-q"], { env: entorno(), windowsHide: true, timeout: 30000 });
+  // wsl.exe responde en UTF-16 salvo que WSL_UTF8 valga 1: se limpian los nulos.
+  return `${resultado.stdout ?? ""}${resultado.stderr ?? ""}`
+    .replace(/\0/g, "")
+    .split(/\r?\n/)
+    .map((linea) => linea.replace(/^\uFEFF/, "").trim())
+    .filter((linea) => linea.length > 0);
+}
+
+function elegirDistro() {
+  if (!distroBuscada) {
+    distroBuscada = true;
+    const utiles = listarDistros().filter((nombre) => !/^docker-desktop/i.test(nombre));
+    distroWsl = utiles.find((nombre) => /ubuntu/i.test(nombre)) ?? utiles[0] ?? null;
+  }
+  return distroWsl;
+}
+
+/** `-d <distro>` delante de lo que sea, para no depender de la predeterminada. */
+function argsWsl(args) {
+  const distro = elegirDistro();
+  return distro ? ["-d", distro, ...args] : args;
+}
+
 // Proceso bash en `carpeta` (en Windows, dentro de WSL). --exec evita que wsl.exe
 // pase la linea por otro shell y cambie las comillas.
 function bash(args, carpeta) {
   const opciones = { cwd: carpeta, env: entorno(), stdio: ["ignore", "pipe", "pipe"], windowsHide: true };
   return ES_WINDOWS
-    ? spawn("wsl.exe", ["--cd", carpeta, "--exec", "bash", ...args], opciones)
+    ? spawn("wsl.exe", [...argsWsl(["--cd", carpeta]), "--exec", "bash", ...args], opciones)
     : spawn("bash", args, opciones);
 }
 
@@ -125,7 +160,8 @@ function ayudaPara(id, estado) {
 }
 
 function wslListo() {
-  const resultado = spawnSync("wsl.exe", ["--exec", "true"], { env: entorno(), windowsHide: true, timeout: 60000 });
+  if (!elegirDistro()) return false;
+  const resultado = spawnSync("wsl.exe", argsWsl(["--exec", "true"]), { env: entorno(), windowsHide: true, timeout: 60000 });
   return resultado.status === 0;
 }
 
@@ -136,7 +172,7 @@ async function revisarHerramientas() {
 
   if (ES_WINDOWS) {
     const listo = wslListo();
-    agregar("wsl", "WSL (Linux en Windows)", listo ? "ok" : "falta");
+    agregar("wsl", "WSL (Linux en Windows)", listo ? "ok" : "falta", listo ? elegirDistro() ?? "" : "");
     if (!listo) {
       for (const [id, nombre] of [["git", "Git"], ["docker", "Docker"], ["compose", "Docker Compose"], ["curl", "curl"]]) {
         agregar(id, nombre, "falta", "Primero instala WSL");
@@ -146,7 +182,9 @@ async function revisarHerramientas() {
     }
   }
 
-  const { salida } = await correr(["-c", SONDA], os.homedir());
+  // En el home de la distro y con shell de LOGIN (`-lc`): asi el PATH es el del
+  // usuario y encuentra git aunque este en /snap/bin o lo ponga el perfil.
+  const { salida } = await correr(["-lc", SONDA], "~");
   const valor = (clave) => (salida.match(new RegExp(`^${clave}=(.*)$`, "m"))?.[1] ?? "").trim();
   const docker = valor("docker");
   agregar("git", "Git", valor("git") ? "ok" : "falta", valor("git").replace(/^git version /, ""));
@@ -175,7 +213,7 @@ function abrirTerminal(comando, { admin } = {}) {
   }
   if (ES_WINDOWS) {
     // detached: Windows le da su propia ventana de consola.
-    lanzar("wsl.exe", ["--cd", "~", "--exec", "bash", "-c", conPausa(comando)]);
+    lanzar("wsl.exe", [...argsWsl(["--cd", "~"]), "--exec", "bash", "-c", conPausa(comando)]);
     return { ok: true };
   }
   if (PLATAFORMA === "darwin") {
