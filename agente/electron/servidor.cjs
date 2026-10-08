@@ -88,7 +88,15 @@ async function relojes(carpeta) {
         const url = new URL(r.url);
         enRed = await responde(url.hostname, Number(url.port) || (url.protocol === "https:" ? 443 : 80));
       }
-      return { ...r, sincronizado: utc(r.sincronizado), ultima: utc(r.ultima), enRed };
+      const intentos = (r.intentos ?? []).map((e) => ({
+        ok: e.ok,
+        disparo: e.trigger,
+        fin: utc(e.finishedAt),
+        leidas: e.readCount,
+        nuevas: e.newCount,
+        error: e.error,
+      }));
+      return { ...r, sincronizado: utc(r.sincronizado), ultima: utc(r.ultima), enRed, intentos };
     }),
   );
 }

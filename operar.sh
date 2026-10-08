@@ -73,12 +73,24 @@ relojes() {
         SELECT coalesce(jsonb_agg(r ORDER BY r.nombre NULLS LAST, r.serie), $$[]$$::jsonb)
         FROM (
             SELECT c."serialNumber" AS serie, c.name AS nombre, c.url, c."countsAttendance" AS cuenta,
-                   c."syncedAt" AS sincronizado, coalesce(p.checadas, 0) AS checadas, p.ultima
+                   c."syncedAt" AS sincronizado, coalesce(p.checadas, 0) AS checadas, p.ultima,
+                   coalesce(s.intentos, '[]'::jsonb) AS intentos
             FROM time_clocks c
             LEFT JOIN (
                 SELECT "clockSerial", count(*) AS checadas, max("occurredAt") AS ultima
                 FROM time_clock_punches GROUP BY "clockSerial"
             ) p ON p."clockSerial" = c."serialNumber"
+            -- Timeline de sincronizacion: los ultimos 20 intentos de cada reloj.
+            LEFT JOIN LATERAL (
+                SELECT jsonb_agg(e ORDER BY e."startedAt" DESC) AS intentos
+                FROM (
+                    SELECT "startedAt", "finishedAt", trigger, ok, "readCount", "newCount", error
+                    FROM time_clock_sync_events
+                    WHERE "clockSerial" = c."serialNumber"
+                    ORDER BY "startedAt" DESC
+                    LIMIT 20
+                ) e
+            ) s ON true
         ) r' | sed 's/^/RELOJES /'
 }
 

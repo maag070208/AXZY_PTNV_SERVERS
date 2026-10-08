@@ -39,6 +39,19 @@ export interface EstadoServidor {
   disco: { total: number; libre: number } | null;
 }
 
+/** Un intento de sincronización: un renglón del timeline de soporte. */
+export interface IntentoReloj {
+  ok: boolean;
+  /** `AUTO` (cada 5 min), `MANUAL`, `IMPORT` o `REGISTER`. */
+  disparo: string;
+  fin: string | null;
+  /** Eventos del reloj revisados. */
+  leidas: number;
+  /** Checadas nuevas guardadas. */
+  nuevas: number;
+  error: string | null;
+}
+
 export interface Reloj {
   serie: string;
   nombre: string | null;
@@ -48,6 +61,8 @@ export interface Reloj {
   checadas: number;
   ultima: string | null;
   enRed: boolean | null;
+  /** Sus últimos intentos, el más reciente primero. */
+  intentos: IntentoReloj[];
 }
 
 export interface Direccion {

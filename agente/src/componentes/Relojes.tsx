@@ -1,7 +1,7 @@
 import { ITAlert, ITBadget, ITButton, ITChip, ITLoader, ITText } from "@axzydev/axzy_ui_system";
 import { useCallback, useEffect, useState } from "react";
-import { FaArrowsRotate, FaClock } from "react-icons/fa6";
-import type { Reloj } from "../agente";
+import { FaArrowsRotate, FaCircleCheck, FaCircleInfo, FaCircleXmark, FaClock } from "react-icons/fa6";
+import type { IntentoReloj, Reloj } from "../agente";
 import { fecha, haceCuanto, numero } from "../formato";
 
 // El worker del API sincroniza cada 5 minutos: con 15 sin sincronizar ya algo anda mal.
@@ -13,6 +13,8 @@ export default function Relojes() {
   const [relojes, setRelojes] = useState<Reloj[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
+  /** Serie del reloj cuyo historial de intentos está desplegado. */
+  const [historial, setHistorial] = useState<string | null>(null);
 
   const cargar = useCallback(() => {
     setCargando(true);
@@ -77,6 +79,18 @@ export default function Relojes() {
                   Desde este servidor no se llega al reloj: revisa que esté prendido y conectado a la red.
                 </ITText>
               )}
+
+              <div>
+                <ITButton
+                  label={historial === r.serie ? "Ocultar historial" : `Ver historial (${r.intentos.length})`}
+                  variant="text"
+                  size="sm"
+                  icon={<FaCircleInfo />}
+                  disabled={r.intentos.length === 0}
+                  onClick={() => setHistorial(historial === r.serie ? null : r.serie)}
+                />
+              </div>
+              {historial === r.serie && <Timeline intentos={r.intentos} />}
             </li>
           );
         })}
@@ -96,4 +110,84 @@ function Dato({ titulo, valor, alerta }: { titulo: string; valor: string; alerta
       </ITText>
     </div>
   );
+}
+
+/** El timeline de un reloj: "falló → reintentó → conectó → volvió a fallar". */
+function Timeline({ intentos }: { intentos: IntentoReloj[] }) {
+  const seguidos = (() => {
+    let n = 0;
+    for (const intento of intentos) {
+      if (intento.ok) break;
+      n += 1;
+    }
+    return n;
+  })();
+  const ultimaBien = intentos.find((i) => i.ok)?.fin ?? null;
+
+  return (
+    <div className="flex flex-col gap-1 rounded-lg bg-slate-50 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <ITText as="span" className="text-xs font-semibold">
+          {intentos.length} intento(s)
+        </ITText>
+        {seguidos > 0 ? (
+          <ITBadget label={`${seguidos} fallo(s) seguido(s)`} color="danger" size="sm" />
+        ) : (
+          <ITBadget label="El último conectó" color="success" size="sm" />
+        )}
+        <ITText muted as="span" className="text-xs">
+          Última conexión: {ultimaBien ? haceCuanto(ultimaBien) : "nunca"}
+        </ITText>
+      </div>
+      <ul className="flex flex-col">
+        {intentos.map((intento, indice) => (
+          <li key={`${intento.fin}-${indice}`} className="flex items-start gap-2 border-t border-slate-200 py-1 first:border-t-0">
+            {intento.ok ? (
+              <FaCircleCheck className="mt-0.5 shrink-0 text-emerald-500" size={11} />
+            ) : (
+              <FaCircleXmark className="mt-0.5 shrink-0 text-red-500" size={11} />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <ITText as="span" className="text-xs font-medium">
+                  {intento.fin ? fecha(intento.fin) : "—"}
+                </ITText>
+                <ITText muted as="span" className="text-[11px]">
+                  {disparo(intento.disparo)}
+                </ITText>
+              </div>
+              {intento.ok ? (
+                <ITText muted as="span" className="block break-words text-[11px]">
+                  {intento.nuevas} checadas nuevas de {intento.leidas} eventos revisados
+                </ITText>
+              ) : (
+                <ITText as="span" className="block break-words text-[11px]" style={{ color: "var(--color-danger-600)" }}>
+                  {intento.error ?? "falló sin motivo reportado"}
+                </ITText>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <ITText muted className="text-[11px]">
+        El sistema solo lee de los relojes: un intento fallido no pierde checadas, el equipo las guarda y la siguiente vuelta las trae.
+      </ITText>
+    </div>
+  );
+}
+
+/** Quién disparó el intento, en palabras. */
+function disparo(trigger: string): string {
+  switch (trigger) {
+    case "AUTO":
+      return "automático";
+    case "MANUAL":
+      return "sincronizar todo";
+    case "IMPORT":
+      return "importar por rango";
+    case "REGISTER":
+      return "alta del reloj";
+    default:
+      return trigger;
+  }
 }
