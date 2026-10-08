@@ -5,6 +5,7 @@
 #   bash ./operar.sh logs api|web|postgres    log en vivo de un servicio (Ctrl+C para salir)
 #   bash ./operar.sh estado                   servicios y espacio de Docker (una linea JSON por dato)
 #   bash ./operar.sh relojes                  relojes checadores leidos de la base (JSON)
+#   bash ./operar.sh vigilar                  deja corriendo el vigilante de eventos de Docker
 #   bash ./operar.sh diagnostico <carpeta>    deja en <carpeta> lo que soporte necesita
 
 TOTAL_PASOS=1
@@ -131,6 +132,35 @@ diagnostico() { # carpeta
             dk system df 2>&1; echo
             dk compose images 2>&1
         } >"$d/docker.txt"
+
+        # El estado del engine y de los contenedores: es lo que distingue "se
+        # cayó el engine" de "alguien paró un contenedor". En `salida=`, 0 es un
+        # stop limpio (SIGTERM), 137 es que lo mataron (SIGKILL) y `oom=true` es
+        # que fue la memoria. Los `reinicios` y las horas dicen si la base se
+        # reinició sola y cuánto vivió.
+        {
+            dk info 2>&1
+            echo
+            echo "== desde cuándo =="
+            echo "WSL:     $(uptime -s 2>/dev/null || echo '?')  ($(uptime -p 2>/dev/null || echo '?'))"
+            echo "dockerd: $(ps -o lstart= -C dockerd 2>/dev/null | head -1 | sed 's/^ *//')"
+            echo
+            echo "== contenedores =="
+            local id
+            for id in $(dk ps -aq 2>/dev/null); do
+                dk inspect --format '{{.Name}}  creado={{.Created}}  arrancado={{.State.StartedAt}}  terminado={{.State.FinishedAt}}  reinicios={{.RestartCount}}  salida={{.State.ExitCode}}  oom={{.State.OOMKilled}}' "$id" 2>&1
+            done
+        } >"$d/docker-engine.txt" 2>&1
+
+        # El log del propio engine: si se cayó o lo pararon, aquí queda el motivo.
+        if command -v journalctl >/dev/null 2>&1 && journalctl -u docker -n 300 --no-pager >/dev/null 2>&1; then
+            journalctl -u docker -n 300 --no-pager >"$d/docker-engine.log" 2>&1
+        elif [[ -f /var/log/docker.log ]]; then
+            tail -300 /var/log/docker.log >"$d/docker-engine.log" 2>&1
+        else
+            echo "Sin log del engine: ni 'journalctl -u docker' ni /var/log/docker.log." >"$d/docker-engine.log"
+        fi
+
         local servicio
         for servicio in "${SERVICIOS[@]}"; do
             dk compose logs --no-color --tail 1000 "$servicio" >"$d/log-$servicio.txt" 2>&1
@@ -138,7 +168,45 @@ diagnostico() { # carpeta
     else
         { echo "Docker no responde:"; docker info 2>&1; } >"$d/docker.txt"
     fi
+
+    # El registro del vigilante (lo que de verdad pasó, evento por evento) va
+    # SIEMPRE y completo: no depende de quedar entre los 10 logs más recientes.
+    local v
+    for v in logs/docker-eventos-*.log; do
+        [[ -f $v ]] && cp "$v" "$d/"
+    done
+
+    # Desde WSL se le puede preguntar a Windows cuándo arrancó: si la PC se
+    # reinició, todo lo demás se explica solo. Best-effort y con tope de tiempo.
+    if command -v powershell.exe >/dev/null 2>&1; then
+        local consulta="(Get-CimInstance Win32_OperatingSystem).LastBootUpTime"
+        if command -v timeout >/dev/null 2>&1; then
+            timeout 20 powershell.exe -NoProfile -Command "$consulta" 2>/dev/null | tr -d '\r' >"$d/windows-arranque.txt"
+        else
+            powershell.exe -NoProfile -Command "$consulta" 2>/dev/null | tr -d '\r' >"$d/windows-arranque.txt"
+        fi
+        echo "PC (Windows) arrancó: $(head -1 "$d/windows-arranque.txt")" >>"$d/sistema.txt"
+    fi
+
     echo "Diagnostico en $d"
+}
+
+# Deja corriendo el vigilante (los eventos de Docker). Es idempotente y a
+# propósito NO usa `iniciar_log`: lo llama el Agente cada pocos minutos, y un log
+# por llamada llenaría logs/ y sacaría a los demás de la rotación de 30.
+vigilar() {
+    if [[ -f logs/vigilar.pid ]] && kill -0 "$(cat logs/vigilar.pid 2>/dev/null)" 2>/dev/null; then
+        echo "El vigilante ya está corriendo (pid $(cat logs/vigilar.pid))."
+        return 0
+    fi
+    [[ -f ./vigilar.sh ]] || { echo "AVISO: no encuentro vigilar.sh (actualiza Puerto Nuevo)."; return 0; }
+    nohup bash ./vigilar.sh >/dev/null 2>&1 &
+    sleep 1
+    if [[ -f logs/vigilar.pid ]]; then
+        echo "Vigilante arrancado (pid $(cat logs/vigilar.pid)): los eventos quedan en logs/docker-eventos-*.log"
+    else
+        echo "AVISO: no se pudo arrancar el vigilante."
+    fi
 }
 
 main() {
@@ -146,8 +214,8 @@ main() {
     local accion=$1
     shift || true
     case $accion in
-        reiniciar | limpiar | logs | estado | relojes | diagnostico) "$accion" "$@" ;;
-        *) falla "Uso: bash ./operar.sh reiniciar|limpiar|logs|estado|relojes|diagnostico" ;;
+        reiniciar | limpiar | logs | estado | relojes | vigilar | diagnostico) "$accion" "$@" ;;
+        *) falla "Uso: bash ./operar.sh reiniciar|limpiar|logs|estado|relojes|vigilar|diagnostico" ;;
     esac
 }
 

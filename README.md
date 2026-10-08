@@ -209,7 +209,13 @@ docker compose ps
 - **Inicio:** actualizar, abrir la web, y las direcciones para otras PCs y celulares (con QR), marcando cuáles responden.
 - **Servidores:** estado de API, web y base; reiniciar cada uno o todos; logs en vivo; espacio en disco y «Liberar espacio».
 - **Relojes:** cada reloj checador con sus checadas guardadas, la última checada, cuándo se sincronizó y si el servidor lo alcanza en la red.
-- **Ajustes → Mandar a soporte:** arma un `.zip` con logs, estado y versiones (sin las contraseñas del `.env`) en `soporte/`.
+- **Ajustes → Mandar a soporte:** arma un `.zip` con logs, estado y versiones (sin las contraseñas del `.env`) en `soporte/`. Incluye, además de los logs de los tres servicios, **el registro del vigilante** (evento por evento), **el log del propio Docker**, y de cada contenedor **cuántas veces se reinició, con qué código salió y si fue la memoria** (`docker-engine.txt`), más **desde cuándo están arriba** el engine y WSL (`uptime`) y, si se puede preguntar, **cuándo arrancó Windows** (`windows-arranque.txt`). Eso es lo que distingue «se cayó el engine» de «alguien paró un contenedor» y de «la PC se reinició».
+
+### El vigilante (por qué hay un proceso más)
+
+`vigilar.sh` escucha el flujo de eventos de Docker (`docker events`) y lo deja todo en `logs/docker-eventos-<fecha>.log`: cada `start`, `stop`, `kill`, `die` y `destroy` con su hora **y su código de salida**, un latido cada 10 minutos, y un aviso si el flujo se corta (que es la señal de que se fue el engine).
+
+Existe porque el Agente revisa la salud cada 15 segundos: **una caída de 5 segundos puede caer entre dos revisiones y no dejar rastro**. El vigilante no muestrea: escucha. Corre en WSL, fuera de los contenedores, así que sobrevive a que se caiga Docker, y lo mantiene vivo el Agente (cada 10 minutos lo vuelve a asegurar, por si WSL se reinició), sin depender de systemd.
 
 Cerrar la ventana solo la esconde; para cerrar el Agente: ícono de la bandeja → *Salir del Agente*.
 
@@ -219,8 +225,17 @@ Cerrar la ventana solo la esconde; para cerrar el Agente: ícono de la bandeja �
 bash ./operar.sh reiniciar api             # o web, postgres, todo; espera a que responda
 bash ./operar.sh logs api                  # log en vivo (Ctrl+C para salir)
 bash ./operar.sh limpiar                   # borra imágenes viejas de Docker (no toca la base)
+bash ./operar.sh vigilar                   # deja corriendo el vigilante de eventos de Docker
 bash ./operar.sh diagnostico soporte/hoy   # lo que soporte necesita, en soporte/hoy
 ```
+
+**Pruebas** (antes de mandarle un instalador nuevo al cliente, en cualquier máquina con bash y Node):
+
+```bash
+bash pruebas/correr.sh
+```
+
+No necesita Docker, ni contenedores, ni Windows: los scripts se prueban con un `docker` y un `curl` de mentira (`pruebas/dobles/`) y el vigilante del Agente con el runner de Node. Tarda unos segundos y cubre lo que ya falló una vez en el cliente (08/10/2026): que las sondas exijan la **base** y no solo que el proceso del API viva, que «Reiniciar» no reinicie un API sano, que no cante LISTO si la base no volvió, y que el registro de caídas del Agente anote bien la hora, el estado y la foto de Docker.
 
 O directo con Docker:
 

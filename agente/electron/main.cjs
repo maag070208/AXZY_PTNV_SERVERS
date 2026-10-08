@@ -274,52 +274,54 @@ let avisado = false;
 let intentoArrancar = false;
 const conSesion = { valor: false };
 
-// Registro de caídas y recuperaciones en logs/agente-<fecha>.log. Va aparte del
-// aviso: deja constancia de CUÁNDO dejó de responder el sistema y CÓMO estaba
-// Docker en ese momento (¿se cayó el engine, o alguien paró el contenedor?). El
-// log de Postgres solo dice "me pararon": en el cliente (08/10/2026) hubo cuatro
-// paradas en 33 minutos y ninguna quedó registrada en ningún lado.
-let ultimaSalud = null;
+// Registro de caídas y recuperaciones: el formato y la decisión de "¿cambió?"
+// viven en vigilante.cjs, que no depende de Electron y por eso se prueba solo.
+const { anotar, lineaDocker, lineaTransicion, crearSeguimiento } = require("./vigilante.cjs");
+
+const seguimientoSalud = crearSeguimiento();
+/** Una sola foto de Docker en vuelo: `correr` no tiene timeout y un docker
+ *  trabado dejaría procesos acumulándose. Si no cabe, la transición ya quedó
+ *  anotada y no se pierde el dato que importa. */
 let fotoEnCurso = false;
 async function anotarSalud(enLinea) {
-  if (enLinea === ultimaSalud) return;
-  const primera = ultimaSalud === null;
-  ultimaSalud = enLinea;
-  if (primera) return; // la primera revisión no es una transición
+  if (!seguimientoSalud.cambio(enLinea)) return;
   const carpeta = carpetaActual();
   if (!carpeta) return;
-  const dos = (n) => String(n).padStart(2, "0");
-  const ahora = new Date();
-  const hora = `${ahora.getFullYear()}-${dos(ahora.getMonth() + 1)}-${dos(ahora.getDate())} ${dos(ahora.getHours())}:${dos(ahora.getMinutes())}:${dos(ahora.getSeconds())}`;
-  const archivo = path.join(carpeta, "logs", `agente-${hora.slice(0, 10)}.log`);
-  const anotar = (texto) => {
-    try {
-      fs.mkdirSync(path.dirname(archivo), { recursive: true });
-      fs.appendFileSync(archivo, texto);
-    } catch {}
-  };
 
-  // La transición se anota PRIMERO y sin depender de Docker: es el dato que
-  // faltaba y no se puede perder.
-  anotar(`${hora}  ${enLinea ? "EN LINEA (API y base responden)" : "SIN RESPUESTA (API o base)"}\n`);
+  // La transición se anota PRIMERO y sin depender de Docker.
+  anotar(carpeta, lineaTransicion(enLinea));
 
-  // Después, best-effort, la foto de Docker: es lo que distingue "se cayó el
-  // engine" de "alguien paró el contenedor". Una sola en vuelo (sin timeout en
-  // `correr`, un docker trabado dejaría procesos acumulándose); si no cabe, la
-  // transición ya quedó anotada arriba.
   if (fotoEnCurso) return;
   fotoEnCurso = true;
   try {
     const { docker, servicios } = await estadoServidor(carpeta);
-    const lista = servicios.map((s) => `${s.servicio}=${s.estado}${s.salud ? `/${s.salud}` : ""}`).join(" ");
-    anotar(`      docker=${docker}  ${lista}\n`);
+    anotar(carpeta, lineaDocker(docker, servicios));
   } catch {
   } finally {
     fotoEnCurso = false;
   }
 }
 
+// El vigilante (los eventos de Docker) tiene que estar corriendo SIEMPRE, no solo
+// mientras alguien mira la pantalla: es lo que deja el rastro de quién para los
+// contenedores, y una caída de 5 segundos se le escapa al sondeo de la salud. Se
+// asegura al arrancar y cada 10 minutos, porque WSL puede reiniciarse y llevárselo.
+const VIGILANTE_MS = 10 * 60 * 1000;
+let ultimoVigilante = 0;
+async function asegurarVigilante() {
+  if (Date.now() - ultimoVigilante < VIGILANTE_MS) return;
+  ultimoVigilante = Date.now();
+  const carpeta = carpetaActual();
+  if (!carpeta) return;
+  try {
+    await correr([`./${OPERAR}`, "vigilar"], carpeta);
+  } catch {
+  }
+}
+
 async function revisarSalud() {
+  // El vigilante de eventos se asegura aquí: es el latido que ya corre solo.
+  void asegurarVigilante();
   let enLinea = false;
   try {
     enLinea = (await fetch(URL_SALUD, { signal: AbortSignal.timeout(4000) })).ok;

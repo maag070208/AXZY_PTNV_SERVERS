@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# `docker` de mentira para las pruebas: no hay Docker ni contenedores de verdad.
+# Anota cada llamada en $DOBLE_LOG y contesta según las variables FAKE_*:
+#   FAKE_DOCKER=ok|apagado   ¿responde el engine? (docker info)
+#   FAKE_PS=<lineas JSON>    lo que devuelve `compose ps -a --format json`
+#   FAKE_DF=<linea JSON>     lo que devuelve `system df --format`
+#   FAKE_UP_EXIT / FAKE_RESTART_EXIT   códigos de salida
+#   FAKE_INSPECT_EXIT        el `salida=` de `docker inspect` (0 stop limpio, 137 kill)
+set -uo pipefail
+
+printf '%s\n' "docker $*" >>"${DOBLE_LOG:-/dev/null}"
+
+case "${1:-}" in
+  info)
+    if [[ ${FAKE_DOCKER:-ok} == ok ]]; then
+      echo "Client: Docker Engine - Community"
+      echo "Server: Docker Engine - Community"
+      exit 0
+    fi
+    echo "Cannot connect to the Docker daemon at unix:///var/run/docker.sock" >&2
+    exit 1
+    ;;
+  version) echo "Docker version 29.7.2, build a7dcaa6" ;;
+  system) printf '%s\n' "${FAKE_DF:-{\"Type\":\"Images\",\"Size\":\"1.4GB\"}}" ;;
+  ps)
+    # `docker ps`: con -aq solo los ids (lo que usa el diagnóstico para el inspect).
+    if [[ " $* " == *" -aq "* ]]; then
+      printf 'id1\nid2\nid3\n'
+    else
+      printf 'ptnv-postgres=Up 2 minutes (healthy)\nptnv-api=Up 2 minutes\nptnv-web=Up 2 minutes\n'
+    fi
+    ;;
+  inspect)
+    printf 'ptnv-postgres  creado=2026-10-01T17:00:00.000000000Z  arrancado=2026-10-08T18:21:12.000000000Z  terminado=2026-10-08T18:21:18.000000000Z  reinicios=3  salida=%s  oom=false\n' "${FAKE_INSPECT_EXIT:-0}"
+    ;;
+  events)
+    # Emite unos eventos y termina: así se prueba el formato del vigilante.
+    # El `exit=0` es un stop limpio; sin código, un start.
+    printf 'stop|ptnv-postgres|0\n'
+    printf 'die|ptnv-postgres|0\n'
+    printf 'start|ptnv-postgres|\n'
+    ;;
+  compose)
+    case "${2:-}" in
+      version) echo "v5.5.0" ;;
+      ps) printf '%s\n' "${FAKE_PS:-}" ;;
+      up) echo " Container ptnv-postgres Running "; exit "${FAKE_UP_EXIT:-0}" ;;
+      restart) echo " Container ptnv-api Started "; exit "${FAKE_RESTART_EXIT:-0}" ;;
+      logs) echo "ultimas lineas del API (de mentira)" ;;
+      pull) echo "Image axzydev/axzy_ptnv_api:latest Pulled" ;;
+      *) : ;;
+    esac
+    ;;
+  exec) echo "de mentira" ;;
+  *) : ;;
+esac
+exit 0

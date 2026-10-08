@@ -7,6 +7,11 @@ import type { Tarea } from "../useTarea";
 
 const NOMBRE: Record<Servicio, string> = { api: "API", web: "Web", postgres: "Base de datos" };
 const MAX_LINEAS_LOG = 2000;
+// Relectura del estado mientras la pantalla está abierta. Docker tarda unos
+// segundos en marcar sana a la base (su healthcheck corre cada 5 s) aunque ya
+// acepte conexiones; sin esto el panel se queda con la foto del arranque y
+// sigue diciendo "Arrancando" con la base ya levantada.
+const REFRESCO_MS = 5000;
 // Aviso de disco: menos de 10 GB o menos del 5% libre.
 const POCO_ESPACIO = (d: { total: number; libre: number }) => d.libre < 10 * 1024 ** 3 || d.libre / d.total < 0.05;
 
@@ -24,17 +29,41 @@ export default function Servidores({ tarea }: { tarea: Tarea }) {
   const [logDe, setLogDe] = useState<Servicio | null>(null);
   const corriendo = tarea.fase === "corriendo";
 
+  // Una sola lectura a la vez: `operar.sh estado` arranca un proceso en WSL y
+  // dos lecturas encimadas se estorban.
+  const leyendo = useRef(false);
+  const conDatos = useRef(false);
   const cargar = useCallback(() => {
+    if (leyendo.current) return;
+    leyendo.current = true;
     setError(null);
     window.agente
       .estadoServidor()
-      .then(setEstado)
-      .catch((e) => setError(String(e).replace(/^Error: Error invoking remote method '[^']+': (Error: )?/, "")));
+      .then((nuevo) => {
+        conDatos.current = true;
+        setEstado(nuevo);
+      })
+      .catch((e) => {
+        // Un refresco fallido no borra lo que ya se está viendo (el aviso de
+        // "Docker no responde" lo da el propio estado); solo se reporta si
+        // todavía no hay nada en pantalla.
+        if (!conDatos.current) {
+          setError(String(e).replace(/^Error: Error invoking remote method '[^']+': (Error: )?/, ""));
+        }
+      })
+      .finally(() => {
+        leyendo.current = false;
+      });
   }, []);
 
-  // Al abrir y al terminar cada tarea (reiniciar, actualizar…).
+  // Al abrir, cada pocos segundos mientras la pantalla está abierta (para ver
+  // pasar "Arrancando" → "Corriendo") y al terminar cada tarea (reiniciar,
+  // actualizar…).
   useEffect(() => {
-    if (!corriendo) cargar();
+    if (corriendo) return undefined;
+    cargar();
+    const reloj = window.setInterval(cargar, REFRESCO_MS);
+    return () => window.clearInterval(reloj);
   }, [corriendo, cargar]);
 
   const reiniciar = (servicio: Servicio | "todo") => tarea.iniciar("reiniciar", () => window.agente.reiniciar(servicio));

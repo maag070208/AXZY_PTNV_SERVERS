@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# `curl` de mentira para las pruebas: contesta el código HTTP según la URL, sin
+# abrir nada.
+#
+# Distingue la sonda de VIDA (`/health`, que solo prueba que el proceso del API
+# responde) de la de DISPONIBILIDAD (`/health/ready`, que además consulta la
+# base). Esa es la diferencia que provocó el incidente del 08/10/2026: con la
+# base caída, `/health` devolvía 200 y todo el mundo daba el sistema por bueno.
+#
+#   FAKE_API / FAKE_API_READY    código de :4001 (/health y /health/ready)
+#   FAKE_WEB / FAKE_WEB_READY    código de :8080 (a través de nginx)
+# Si no se define el READY, hereda el de su pareja.
+set -uo pipefail
+
+url=""
+for arg in "$@"; do url=$arg; done
+
+case "$url" in
+  *:4001/*health/ready*) printf '%s' "${FAKE_API_READY:-${FAKE_API:-200}}" ;;
+  *:4001/*) printf '%s' "${FAKE_API:-200}" ;;
+  *:8080/*health/ready*) printf '%s' "${FAKE_WEB_READY:-${FAKE_WEB:-200}}" ;;
+  *:8080/*) printf '%s' "${FAKE_WEB:-200}" ;;
+  *) printf '000' ;;
+esac
