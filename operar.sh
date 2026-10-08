@@ -26,8 +26,17 @@ reiniciar() { # servicio|todo
     asegurar_docker
     if [[ $1 == todo ]]; then
         titulo "Reiniciar los servidores"
-        # up -d levanta lo que estuviera abajo; restart reinicia lo que ya corria.
-        dk compose up -d && dk compose restart api web || falla "No se pudieron reiniciar los servidores."
+        # `up -d --wait` levanta lo que estuviera abajo —incluida la base— y espera
+        # a que arranque, sin tocar lo que ya corre. Antes era
+        # `up -d && restart api web` a ciegas: reiniciaba el API aunque estuviera
+        # sano y no comprobaba si la base había vuelto.
+        dk compose up -d --wait || falla "No se pudieron levantar los servidores (revisa la base de datos)."
+        if responde_ya; then
+            echo "El sistema ya responde: no se reinicia nada."
+        else
+            echo "Todavía no responde: reiniciando el API y la web."
+            dk compose restart api web || falla "No se pudieron reiniciar los servidores."
+        fi
     else
         titulo "Reiniciar $(nombre "$1")"
         dk compose up -d "$1" && dk compose restart "$1" || falla "No se pudo reiniciar $(nombre "$1")."

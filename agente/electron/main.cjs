@@ -13,7 +13,12 @@ const { crearBandeja, notificar, cambiarInicioAutomatico, arrancoConLaSesion } =
 const REPO = "https://github.com/maag070208/AXZY_PTNV_SERVERS.git";
 const NOMBRE_CARPETA = "AXZY_PTNV_SERVERS";
 const SCRIPT = "actualizar.sh";
-const URL_SALUD = "http://localhost:4001/api/v1/health";
+// /health solo dice que el proceso vive: NO toca la base de datos. Con la base
+// caída devuelve 200 igual, así que el Agente mostraba "en línea", no avisaba y
+// no intentaba levantar nada mientras el cliente veía 502 en todas las pantallas
+// (cliente, 08/10/2026). /health/ready hace un SELECT 1 y responde 503 si la base
+// no está; existe desde el 26/09/2026, así que toda imagen del API lo trae.
+const URL_SALUD = "http://localhost:4001/api/v1/health/ready";
 const URL_WEB = "http://localhost:8080";
 const APP_ID = "dev.axzy.puertonuevo.agente"; // el mismo appId de electron-builder: Windows lo pide para los avisos
 const SERVICIOS = ["api", "web", "postgres"];
@@ -269,6 +274,51 @@ let avisado = false;
 let intentoArrancar = false;
 const conSesion = { valor: false };
 
+// Registro de caídas y recuperaciones en logs/agente-<fecha>.log. Va aparte del
+// aviso: deja constancia de CUÁNDO dejó de responder el sistema y CÓMO estaba
+// Docker en ese momento (¿se cayó el engine, o alguien paró el contenedor?). El
+// log de Postgres solo dice "me pararon": en el cliente (08/10/2026) hubo cuatro
+// paradas en 33 minutos y ninguna quedó registrada en ningún lado.
+let ultimaSalud = null;
+let fotoEnCurso = false;
+async function anotarSalud(enLinea) {
+  if (enLinea === ultimaSalud) return;
+  const primera = ultimaSalud === null;
+  ultimaSalud = enLinea;
+  if (primera) return; // la primera revisión no es una transición
+  const carpeta = carpetaActual();
+  if (!carpeta) return;
+  const dos = (n) => String(n).padStart(2, "0");
+  const ahora = new Date();
+  const hora = `${ahora.getFullYear()}-${dos(ahora.getMonth() + 1)}-${dos(ahora.getDate())} ${dos(ahora.getHours())}:${dos(ahora.getMinutes())}:${dos(ahora.getSeconds())}`;
+  const archivo = path.join(carpeta, "logs", `agente-${hora.slice(0, 10)}.log`);
+  const anotar = (texto) => {
+    try {
+      fs.mkdirSync(path.dirname(archivo), { recursive: true });
+      fs.appendFileSync(archivo, texto);
+    } catch {}
+  };
+
+  // La transición se anota PRIMERO y sin depender de Docker: es el dato que
+  // faltaba y no se puede perder.
+  anotar(`${hora}  ${enLinea ? "EN LINEA (API y base responden)" : "SIN RESPUESTA (API o base)"}\n`);
+
+  // Después, best-effort, la foto de Docker: es lo que distingue "se cayó el
+  // engine" de "alguien paró el contenedor". Una sola en vuelo (sin timeout en
+  // `correr`, un docker trabado dejaría procesos acumulándose); si no cabe, la
+  // transición ya quedó anotada arriba.
+  if (fotoEnCurso) return;
+  fotoEnCurso = true;
+  try {
+    const { docker, servicios } = await estadoServidor(carpeta);
+    const lista = servicios.map((s) => `${s.servicio}=${s.estado}${s.salud ? `/${s.salud}` : ""}`).join(" ");
+    anotar(`      docker=${docker}  ${lista}\n`);
+  } catch {
+  } finally {
+    fotoEnCurso = false;
+  }
+}
+
 async function revisarSalud() {
   let enLinea = false;
   try {
@@ -276,6 +326,7 @@ async function revisarSalud() {
   } catch {}
   enviar("salud", enLinea);
   bandeja?.ponerSalud(enLinea);
+  await anotarSalud(enLinea);
 
   if (enLinea) {
     if (avisado) notificar("Puerto Nuevo volvió a responder", "El sistema ya está en línea.");

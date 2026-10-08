@@ -77,8 +77,13 @@ asegurar_docker() {
 }
 
 ESPERA_SEGUNDOS=180
-URL_API=http://localhost:4001/api/v1/health
-URL_WEB=http://localhost:8080/api/v1/health
+# /health solo dice que el proceso vive: NO toca la base de datos, así que con la
+# base caída devuelve 200 igual y el reinicio cantaba "LISTO" mientras el cliente
+# veía 502 en todas las pantallas (cliente, 08/10/2026). /health/ready hace un
+# SELECT 1 y responde 503 si la base no está. La de la web pasa por nginx, así que
+# además comprueba el proxy.
+URL_API=http://localhost:4001/api/v1/health/ready
+URL_WEB=http://localhost:8080/api/v1/health/ready
 
 esperar_url() { # url nombre
     local limite=$((SECONDS + ESPERA_SEGUNDOS)) codigo
@@ -97,14 +102,21 @@ esperar_url() { # url nombre
     return 1
 }
 
+# Respuesta inmediata (no espera): ¿el API y la web contestan ya? Las dos URLs son
+# las de /health/ready, así que esto también exige que la base responda.
+responde_ya() {
+    [[ $(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$URL_API") == 200 &&
+       $(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$URL_WEB") == 200 ]]
+}
+
 # Espera a que el API y la web respondan; si no, muestra el log del API y falla.
 esperar_sistema() {
-    if ! esperar_url "$URL_API" "API"; then
+    if ! esperar_url "$URL_API" "API y base de datos"; then
         echo "Ultimas lineas del API:"
         dk compose logs --tail 60 api
-        falla "El API no respondio en $ESPERA_SEGUNDOS segundos ($URL_API)."
+        falla "El API o la base de datos no respondieron en $ESPERA_SEGUNDOS segundos ($URL_API)."
     fi
-    esperar_url "$URL_WEB" "Web" || falla "La web no llega al API ($URL_WEB)."
+    esperar_url "$URL_WEB" "Web" || falla "La web no llega al API, o el API no llega a la base ($URL_WEB)."
 }
 
 # Deja en RESPALDO la ruta del respaldo nuevo. La base se levanta primero: si el

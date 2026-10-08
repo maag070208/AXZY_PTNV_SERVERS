@@ -144,7 +144,7 @@ Los pasos (`actualizar.sh`):
 3. Respalda la base de datos en `respaldos/` (ver «Respaldar la base de datos»).
 4. Baja las imágenes nuevas del API y la web (`docker compose pull`) y dice cuál trae versión nueva.
 5. Aplica las migraciones (`npx prisma migrate deploy`). **Si fallan, se detiene aquí y el sistema sigue con la versión anterior.**
-6. Reinicia los servidores con la versión nueva y espera a que `/api/v1/health` responda 200 (directo en el API `:4001` y a través de la web `:8080`).
+6. Reinicia los servidores con la versión nueva y espera a que `/api/v1/health/ready` responda 200 (directo en el API `:4001` y a través de la web `:8080`). Ese endpoint hace un `SELECT 1`, así que un 200 significa **API y base de datos**; `/api/v1/health` a secas solo prueba que el proceso vive y devuelve 200 aunque la base esté caída.
 7. Borra las imágenes viejas.
 
 Si algo falla, se detiene en ese paso y deja el detalle en `logs/` (manda ese archivo a soporte).
