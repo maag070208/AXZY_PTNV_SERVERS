@@ -89,7 +89,9 @@ export default function Acceso() {
       {direcciones?.some((d) => !d.accesible) && (
         <ITText muted className="text-xs">
           «No responde» quiere decir que ni esta misma computadora llega a la web por esa dirección, así que las demás tampoco. Si Puerto Nuevo corre en WSL,
-          hay que reenviar el puerto 8080 de Windows hacia WSL; revisa también el firewall. Pide ayuda a soporte.
+          hay que reenviar los puertos de Windows hacia WSL: en PowerShell como administrador, dentro de la carpeta de Puerto Nuevo, corre{" "}
+          <code>powershell -ExecutionPolicy Bypass -File reenviar-puertos.ps1 -Programar</code> y vuelve a revisar. Pasa también al cambiar la IP del
+          servidor.
         </ITText>
       )}
     </div>

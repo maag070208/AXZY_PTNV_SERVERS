@@ -263,6 +263,25 @@ docker compose logs -f api
 - Si el log termina con un error de conexión a `postgres`, espera 10 s más (la BD aún está arrancando) y revisa de nuevo.
 - Si el API quedó arriba pero no "healthy", suele ser normal los primeros segundos; `docker compose restart api` frecuentemente lo resuelve.
 
+### Las otras computadoras no entran, o cambió la IP del servidor (Windows + WSL)
+
+En el servidor `http://localhost:8080` abre, pero desde otra PC o el celular no; en el Agente, **Inicio → Desde otras computadoras** marca la dirección como **No responde**.
+
+Docker dentro de WSL solo publica los puertos hacia esa misma Windows: para la red hay que reenviarlos. El sistema no guarda la IP del servidor en ningún lado (`WEB_API_URL=/api/v1` sirve con cualquiera), así que al cambiarla lo único que se rompe es un reenvío viejo amarrado a la IP anterior.
+
+En **PowerShell como administrador**, con el mismo usuario que usa WSL, en la carpeta `AXZY_PTNV_SERVERS`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File reenviar-puertos.ps1 -Programar
+```
+
+- Reenvía los puertos 8080 (web) y 4001 (API) escuchando en todas las direcciones: si la IP del servidor vuelve a cambiar, no hay que tocar nada.
+- `-Programar` deja una tarea que lo rehace cada vez que ese usuario inicia sesión, porque la dirección interna de WSL cambia en cada reinicio. Si WSL se reinicia sin reiniciar Windows (`wsl --shutdown`), corre el script otra vez.
+- Si el Agente ya dice **Responde** y otra PC sigue sin entrar, es el firewall: agrega `-AbrirFirewall` (crea la regla de entrada «Puerto Nuevo» para esos dos puertos).
+- Cada corrida deja una línea en `logs\reenviar-puertos.log`. Ver las reglas: `netsh interface portproxy show all`.
+
+Después hay que cambiar la dirección en los dispositivos: favoritos y accesos directos (`http://<IP nueva>:8080`) y, en la app móvil, la dirección del servidor en la pantalla de inicio de sesión (`http://<IP nueva>:4001/api/v1`).
+
 ### Puerto ocupado (postgres/web/api)
 
 ```bash

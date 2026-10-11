@@ -35,8 +35,9 @@ test("la primera revisión no es una transición (todavía no hay con qué compa
 
 test("cada transición se anota con hora y estado", () => {
   const carpeta = taller();
-  v.anotar(carpeta, v.lineaTransicion(false, FECHA));
-  v.anotar(carpeta, v.lineaTransicion(true, FECHA));
+  // Con FECHA también en anotar: si no, escribe en el archivo de hoy y la prueba solo pasa el 8 de octubre.
+  v.anotar(carpeta, v.lineaTransicion(false, FECHA), FECHA);
+  v.anotar(carpeta, v.lineaTransicion(true, FECHA), FECHA);
   assert.deepEqual(fs.readFileSync(v.archivoDelDia(carpeta, FECHA), "utf8").trimEnd().split("\n"), [
     "2026-10-08 18:21:13  SIN RESPUESTA (API o base)",
     "2026-10-08 18:21:13  EN LINEA (API y base responden)",
