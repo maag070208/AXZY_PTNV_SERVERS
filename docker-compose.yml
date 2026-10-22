@@ -46,6 +46,11 @@ services:
       # así que da igual cuál de los dos use quien lo llene.
       TIME_CLOCK_USER: ${TIME_CLOCK_USER:-${CHECADOR_USER:-}}
       TIME_CLOCK_PASS: ${TIME_CLOCK_PASS:-${CHECADOR_PASS:-}}
+      # Estación de enrolamiento de huellas (DS-K1F600U) por red. Opcional: sin estos valores,
+      # la captura de huellas desde la web no está disponible. Solo captura; no recibe escrituras.
+      FINGERPRINT_STATION_URL: ${FINGERPRINT_STATION_URL:-}
+      FINGERPRINT_STATION_USER: ${FINGERPRINT_STATION_USER:-}
+      FINGERPRINT_STATION_PASS: ${FINGERPRINT_STATION_PASS:-}
       # Zona horaria de los reportes de entradas/salidas. Vacía = America/Mexico_City.
       ACCESS_REPORT_TIMEZONE: ${ACCESS_REPORT_TIMEZONE:-}
       # Archivos (evidencias de tickets, fotos y documentos del personal) en S3.
